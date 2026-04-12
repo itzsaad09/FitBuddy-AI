@@ -1,0 +1,119 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build_android:
+    name: Build Android
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: "zulu"
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Create .env file
+        run: |
+          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+
+      - name: Verify CSV Asset Inclusion
+        run: |
+          if [ -f "assets/exercises.csv" ]; then
+            echo "✅ exercises.csv found in assets directory."
+          else
+            echo "❌ ERROR: assets/exercises.csv is missing!"
+            exit 1
+          fi
+
+      - name: Get Version from pubspec.yaml
+        id: get_version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Build App Bundle
+        run: flutter build appbundle --release
+
+      - name: Rename Android Artifact
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}-APK
+          path: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
+
+  build_ios:
+    name: Build iOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Create .env file
+        run: |
+          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+
+      - name: Verify CSV Asset Inclusion
+        run: |
+          if [ -f "assets/exercises.csv" ]; then
+            echo "✅ exercises.csv found in assets directory."
+          else
+            echo "❌ ERROR: assets/exercises.csv is missing!"
+            exit 1
+          fi
+
+      - name: Get Version from pubspec.yaml
+        id: get_version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build iOS (No-Codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA (Unsigned)
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa Payload
+          rm -rf Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}-IPA
+          path: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa

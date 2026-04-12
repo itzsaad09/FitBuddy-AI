@@ -13,6 +13,8 @@ jobs:
   build_android:
     name: Build Android
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -29,12 +31,8 @@ jobs:
           channel: "stable"
           cache: true
 
-      - name: Install Dependencies
-        run: flutter pub get
-
       - name: Create .env file
-        run: |
-          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+        run: echo "API_KEY=${{ secrets.API_KEY }}" > .env
 
       - name: Verify CSV Asset Inclusion
         run: |
@@ -45,7 +43,7 @@ jobs:
             exit 1
           fi
 
-      - name: Get Version from pubspec.yaml
+      - name: Get Version
         id: get_version
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
@@ -54,17 +52,13 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Build App Bundle
-        run: flutter build appbundle --release
+      - name: Rename & Upload
+        run: mv build/app/outputs/flutter-apk/app-release.apk FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
 
-      - name: Rename Android Artifact
-        run: |
-          mv build/app/outputs/flutter-apk/app-release.apk FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
-
-      - name: Upload APK
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}-APK
+          name: android-artifact
           path: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
 
   build_ios:
@@ -80,12 +74,8 @@ jobs:
           channel: "stable"
           cache: true
 
-      - name: Install Dependencies
-        run: flutter pub get
-
       - name: Create .env file
-        run: |
-          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+        run: echo "API_KEY=${{ secrets.API_KEY }}" > .env
 
       - name: Verify CSV Asset Inclusion
         run: |
@@ -96,24 +86,38 @@ jobs:
             exit 1
           fi
 
-      - name: Get Version from pubspec.yaml
+      - name: Get Version
         id: get_version
         run: |
           VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build iOS (No-Codesign)
+      - name: Build iOS
         run: flutter build ios --release --no-codesign
 
-      - name: Create IPA (Unsigned)
+      - name: Create IPA
         run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
           zip -r FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa Payload
-          rm -rf Payload
 
-      - name: Upload IPA
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}-IPA
+          name: ios-artifact
           path: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa
+
+  create_release:
+    name: Create GitHub Release
+    needs: [build_android, build_ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Push to Releases
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "*/FitBuddyAI-*.apk,*/FitBuddyAI-*.ipa"
+          tag: v${{ needs.build_android.outputs.version }}-b${{ github.run_number }}
+          token: ${{ secrets.TOKEN }}

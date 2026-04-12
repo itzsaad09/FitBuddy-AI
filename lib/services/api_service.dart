@@ -54,37 +54,68 @@ class ApiService {
     if (_cachedCsvExercises != null) return _cachedCsvExercises!;
 
     try {
-      final csvString = await rootBundle.loadString('assets/exercises.csv');
+      String csvString = await rootBundle.loadString('assets/exercises.csv');
+
+      // Strip UTF-8 BOM if present
+      if (csvString.startsWith('\uFEFF')) {
+        csvString = csvString.substring(1);
+      }
+
       debugPrint('CSV loaded. Bytes: ${csvString.length}');
+
       final List<List<dynamic>> rows = const CsvToListConverter().convert(
         csvString,
       );
 
-      if (rows.isEmpty) return [];
+      if (rows.isEmpty) {
+        debugPrint('CSV is empty or could not be parsed.');
+        return [];
+      }
 
-      final headers = rows.first
-          .map((e) => e.toString().toLowerCase().trim().replaceAll('"', ''))
-          .toList();
+      // Robust header parsing: trim, lowercase, remove BOM and extra quotes
+      final headers = rows.first.map((e) {
+        return e
+            .toString()
+            .replaceAll('\uFEFF', '')
+            .replaceAll('"', '')
+            .toLowerCase()
+            .trim();
+      }).toList();
+
+      debugPrint('CSV Headers: $headers');
+
       final List<Exercise> exercises = [];
 
       for (int i = 1; i < rows.length; i++) {
         final row = rows[i];
-        if (row.isEmpty) continue;
+        if (row.isEmpty ||
+            (row.length == 1 && row[0].toString().trim().isEmpty)) {
+          continue;
+        }
 
         final Map<String, dynamic> mapped = {};
         for (int j = 0; j < headers.length; j++) {
           if (j < row.length) {
             String value = row[j].toString().trim();
-            // Remove literal outer quotes if the parser didn't strip them
+            // Deep clean quotes
             if (value.startsWith('"') && value.endsWith('"')) {
               value = value.substring(1, value.length - 1);
             }
             mapped[headers[j]] = value;
+          } else {
+            mapped[headers[j]] = '';
           }
         }
-        exercises.add(Exercise.fromJson(mapped));
+
+        try {
+          exercises.add(Exercise.fromJson(mapped));
+        } catch (e) {
+          // Skip invalid rows instead of crashing the whole load
+          debugPrint('Error parsing row $i: $e');
+        }
       }
 
+      debugPrint('Successfully loaded ${exercises.length} exercises');
       _cachedCsvExercises = exercises;
       return exercises;
     } catch (e) {

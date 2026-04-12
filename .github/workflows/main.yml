@@ -9,6 +9,9 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build_android:
     name: Build Android
@@ -31,8 +34,14 @@ jobs:
           channel: "stable"
           cache: true
 
+      - name: Install Dependencies
+        run: flutter pub get
+
       - name: Create .env file
-        run: echo "API_KEY=${{ secrets.API_KEY }}" > .env
+        run: |
+          cat <<EOF > .env
+          API_KEY=${{ secrets.API_KEY }}
+          EOF
 
       - name: Verify CSV Asset Inclusion
         run: |
@@ -53,13 +62,13 @@ jobs:
         run: flutter build apk --release
 
       - name: Rename & Upload
-        run: mv build/app/outputs/flutter-apk/app-release.apk FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
+        run: mv build/app/outputs/flutter-apk/app-release.apk "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.apk"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-artifact
-          path: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk
+          path: "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.apk"
 
   build_ios:
     name: Build iOS
@@ -74,8 +83,14 @@ jobs:
           channel: "stable"
           cache: true
 
+      - name: Install Dependencies
+        run: flutter pub get
+
       - name: Create .env file
-        run: echo "API_KEY=${{ secrets.API_KEY }}" > .env
+        run: |
+          cat <<EOF > .env
+          API_KEY=${{ secrets.API_KEY }}
+          EOF
 
       - name: Verify CSV Asset Inclusion
         run: |
@@ -99,13 +114,13 @@ jobs:
         run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa Payload
+          zip -r "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.ipa" Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-artifact
-          path: FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa
+          path: "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.ipa"
 
   create_release:
     name: Create GitHub Release
@@ -118,6 +133,6 @@ jobs:
       - name: Push to Releases
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "*/FitBuddyAI-*.apk,*/FitBuddyAI-*.ipa"
+          artifacts: "*/FitBuddy AI v*.apk,*/FitBuddy AI v*.ipa"
           tag: v${{ needs.build_android.outputs.version }}-b${{ github.run_number }}
           token: ${{ secrets.TOKEN }}

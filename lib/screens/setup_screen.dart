@@ -112,7 +112,7 @@ class _SetupScreenState extends State<SetupScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      widget.isEditing ? 'Refine Metrics' : 'FitBuddy',
+                      widget.isEditing ? 'Refine Metrics' : 'FitBuddyAI',
                       style: TextStyle(
                         fontSize: 40,
                         fontWeight: FontWeight.w300,

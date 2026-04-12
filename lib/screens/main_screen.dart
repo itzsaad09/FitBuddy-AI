@@ -137,7 +137,7 @@ class _MainScreenState extends State<MainScreen> {
                 surfaceTintColor: Colors.transparent,
                 flexibleSpace: FlexibleSpaceBar(
                   title: Text(
-                    'FitBuddy',
+                    'FitBuddyAI',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurface,
                       fontWeight: FontWeight.w900,

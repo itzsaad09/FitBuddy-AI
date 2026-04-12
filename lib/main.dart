@@ -16,13 +16,13 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ThemeService()),
         ChangeNotifierProvider(create: (_) => UserProfileProvider()),
       ],
-      child: const FitBuddy_AI(),
+      child: const FitBuddyAI(),
     ),
   );
 }
 
-class FitBuddy_AI extends StatelessWidget {
-  const FitBuddy_AI({super.key});
+class FitBuddyAI extends StatelessWidget {
+  const FitBuddyAI({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +113,7 @@ class FitBuddy_AI extends StatelessWidget {
     );
 
     return MaterialApp(
-      title: 'FitBuddy AI',
+      title: 'FitBuddyAI',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,

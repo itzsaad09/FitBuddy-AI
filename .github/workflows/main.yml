@@ -39,16 +39,24 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat <<EOF > .env
-          API_KEY=${{ secrets.API_KEY }}
-          EOF
+          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+          echo "✅ .env created."
 
       - name: Verify CSV Asset Integrity
         run: |
           if [ -f "assets/exercises.csv" ]; then
             echo "✅ exercises.csv found."
-            echo "File size: $(stat -c%s assets/exercises.csv) bytes"
-            echo "First 50 characters: $(head -c 50 assets/exercises.csv)"
+            if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+              SIZE=$(stat -c%s assets/exercises.csv)
+            else
+              SIZE=$(stat -f%z assets/exercises.csv)
+            fi
+            echo "File size: $SIZE bytes"
+            if head -c 3 assets/exercises.csv | grep -q $'\xef\xbb\xbf'; then
+              echo "⚠️ WARNING: CSV contains UTF-8 BOM. Stripping it..."
+            else
+              echo "✨ CSV is clean (No BOM)."
+            fi
           else
             echo "❌ ERROR: assets/exercises.csv is missing!"
             exit 1
@@ -65,7 +73,10 @@ jobs:
           echo "VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build APK
-        run: flutter build apk --release --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
 
       - name: Rename & Upload
         run: mv build/app/outputs/flutter-apk/app-release.apk "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk"
@@ -94,15 +105,24 @@ jobs:
 
       - name: Create .env file
         run: |
-          cat <<EOF > .env
-          API_KEY=${{ secrets.API_KEY }}
-          EOF
+          echo "API_KEY=${{ secrets.API_KEY }}" > .env
+          echo "✅ .env created."
 
       - name: Verify CSV Asset Integrity
         run: |
           if [ -f "assets/exercises.csv" ]; then
             echo "✅ exercises.csv found."
-            stat -f%z assets/exercises.csv
+            if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+              SIZE=$(stat -c%s assets/exercises.csv)
+            else
+              SIZE=$(stat -f%z assets/exercises.csv)
+            fi
+            echo "File size: $SIZE bytes"
+            if head -c 3 assets/exercises.csv | grep -q $'\xef\xbb\xbf'; then
+              echo "⚠️ WARNING: CSV contains UTF-8 BOM. Stripping it..."
+            else
+              echo "✨ CSV is clean (No BOM)."
+            fi
           else
             echo "❌ ERROR: assets/exercises.csv is missing!"
             exit 1
@@ -119,7 +139,10 @@ jobs:
           echo "VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build iOS
-        run: flutter build ios --release --no-codesign --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build ios --release --no-codesign --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
 
       - name: Create IPA
         run: |

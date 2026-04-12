@@ -23,7 +23,7 @@ class DatabaseService {
   Future<Database?> _initDatabase() async {
     if (kIsWeb || Platform.environment.containsKey('FLUTTER_TEST')) return null;
     String dbPath = await getDatabasesPath();
-    String path = join(dbPath, 'fitbuddy.db');
+    String path = join(dbPath, 'fitbuddyai.db');
     return await openDatabase(
       path,
       version: 1,

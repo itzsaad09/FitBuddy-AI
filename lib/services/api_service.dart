@@ -26,23 +26,16 @@ class ApiService {
   }) async {
     try {
       final results = await _loadExercisesFromCsv();
-      final targetCat = bodyPart.toLowerCase().trim();
-
-      // Fuzzy matching filter: check both exact match and 'contains' match
-      // Also handles the possibility of some records having 'waists' vs 'waist'
-      final filtered = results.where((e) {
-        final ecat = e.bodyPart.toLowerCase().trim();
-        return ecat == targetCat ||
-            (ecat.isNotEmpty &&
-                targetCat.isNotEmpty &&
-                ecat.contains(targetCat)) ||
-            (ecat.isNotEmpty &&
-                targetCat.isNotEmpty &&
-                targetCat.contains(ecat));
-      }).toList();
+      final filtered = results
+          .where(
+            (e) =>
+                e.bodyPart.toLowerCase().trim() ==
+                bodyPart.toLowerCase().trim(),
+          )
+          .toList();
 
       debugPrint(
-        'Filter check: Target=$targetCat, DatasetSize=${results.length}, MatchCount=${filtered.length}',
+        'Loaded ${results.length} total, filtered ${filtered.length} for $bodyPart',
       );
 
       if (filtered.isNotEmpty) {
@@ -52,7 +45,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      debugPrint('Error filtering exercises for $bodyPart: $e');
+      debugPrint('Error loading exercises for $bodyPart: $e');
       return [];
     }
   }
@@ -61,74 +54,47 @@ class ApiService {
     if (_cachedCsvExercises != null) return _cachedCsvExercises!;
 
     try {
-      final ByteData data = await rootBundle.load('assets/exercises.csv');
-      final List<int> bytes = data.buffer.asUint8List();
-      String csvString = utf8.decode(bytes, allowMalformed: true);
+      String csvString = await rootBundle.loadString('assets/exercises.csv');
 
+      // Strip UTF-8 BOM if present (common issue in Linux builds/CI)
       if (csvString.startsWith('\uFEFF')) {
         csvString = csvString.substring(1);
       }
 
-      String delimiter = ',';
-      if (csvString.contains(';')) {
-        final firstLine = csvString.split('\n').first;
-        final commaCount = ','.allMatches(firstLine).length;
-        final semiCount = ';'.allMatches(firstLine).length;
-        if (semiCount > commaCount) delimiter = ';';
-      }
-
-      final List<List<dynamic>> rows = CsvToListConverter(
-        fieldDelimiter: delimiter,
-        shouldParseNumbers: false,
-      ).convert(csvString);
+      debugPrint('CSV loaded. Bytes: ${csvString.length}');
+      final List<List<dynamic>> rows = const CsvToListConverter().convert(
+        csvString,
+      );
 
       if (rows.isEmpty) return [];
 
-      final headers = rows.first.map((e) {
-        return e
-            .toString()
-            .replaceAll('\uFEFF', '')
-            .replaceAll('"', '')
-            .toLowerCase()
-            .trim();
-      }).toList();
-
+      final headers = rows.first
+          .map((e) => e.toString().toLowerCase().trim().replaceAll('"', ''))
+          .toList();
       final List<Exercise> exercises = [];
 
       for (int i = 1; i < rows.length; i++) {
         final row = rows[i];
-        if (row.isEmpty || (row.length == 1 && row[0].toString().isEmpty)) {
-          continue;
-        }
+        if (row.isEmpty) continue;
 
         final Map<String, dynamic> mapped = {};
         for (int j = 0; j < headers.length; j++) {
           if (j < row.length) {
             String value = row[j].toString().trim();
+            // Remove literal outer quotes if the parser didn't strip them
             if (value.startsWith('"') && value.endsWith('"')) {
               value = value.substring(1, value.length - 1);
             }
             mapped[headers[j]] = value;
           }
         }
-
-        // Failsafe: if 'bodypart' header wasn't matched but we have at least 3 columns,
-        // use column 2 (index 2) as bodypart fallback (standard exercises.csv layout)
-        if ((mapped['bodypart'] == null || mapped['bodypart'].isEmpty) &&
-            row.length >= 3) {
-          mapped['bodypart'] = row[2].toString().trim();
-        }
-
-        try {
-          exercises.add(Exercise.fromJson(mapped));
-        } catch (_) {}
+        exercises.add(Exercise.fromJson(mapped));
       }
 
       _cachedCsvExercises = exercises;
-      debugPrint('LOAD SUCCESS: Total exercises = ${exercises.length}');
       return exercises;
     } catch (e) {
-      debugPrint('LOAD CRITICAL ERROR: $e');
+      debugPrint('Error loading exercises from CSV: $e');
       return [];
     }
   }

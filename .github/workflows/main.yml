@@ -43,10 +43,12 @@ jobs:
           API_KEY=${{ secrets.API_KEY }}
           EOF
 
-      - name: Verify CSV Asset Inclusion
+      - name: Verify CSV Asset Integrity
         run: |
           if [ -f "assets/exercises.csv" ]; then
-            echo "✅ exercises.csv found in assets directory."
+            echo "✅ exercises.csv found."
+            echo "File size: $(stat -c%s assets/exercises.csv) bytes"
+            echo "First 50 characters: $(head -c 50 assets/exercises.csv)"
           else
             echo "❌ ERROR: assets/exercises.csv is missing!"
             exit 1
@@ -55,20 +57,24 @@ jobs:
       - name: Get Version
         id: get_version
         run: |
-          VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          VERSION_NAME=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
+          BUILD_NUMBER=${{ github.run_number }}
+          FULL_VERSION="${VERSION_NAME}+${BUILD_NUMBER}"
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
 
       - name: Rename & Upload
-        run: mv build/app/outputs/flutter-apk/app-release.apk "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.apk"
+        run: mv build/app/outputs/flutter-apk/app-release.apk "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: android-artifact
-          path: "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.apk"
+          path: "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk"
 
   build_ios:
     name: Build iOS
@@ -92,10 +98,11 @@ jobs:
           API_KEY=${{ secrets.API_KEY }}
           EOF
 
-      - name: Verify CSV Asset Inclusion
+      - name: Verify CSV Asset Integrity
         run: |
           if [ -f "assets/exercises.csv" ]; then
-            echo "✅ exercises.csv found in assets directory."
+            echo "✅ exercises.csv found."
+            stat -f%z assets/exercises.csv
           else
             echo "❌ ERROR: assets/exercises.csv is missing!"
             exit 1
@@ -104,23 +111,27 @@ jobs:
       - name: Get Version
         id: get_version
         run: |
-          VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | tr -d '\r')
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          VERSION_NAME=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
+          BUILD_NUMBER=${{ github.run_number }}
+          FULL_VERSION="${VERSION_NAME}+${BUILD_NUMBER}"
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_OUTPUT
+          echo "VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build iOS
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
 
       - name: Create IPA
         run: |
           mkdir -p Payload
           cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.ipa" Payload
+          zip -r "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa" Payload
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-artifact
-          path: "FitBuddy AI v${{ steps.get_version.outputs.VERSION }}.ipa"
+          path: "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.ipa"
 
   create_release:
     name: Create GitHub Release
@@ -133,6 +144,6 @@ jobs:
       - name: Push to Releases
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "*/FitBuddy AI v*.apk,*/FitBuddy AI v*.ipa"
-          tag: v${{ needs.build_android.outputs.version }}-b${{ github.run_number }}
+          artifacts: "*/FitBuddyAI-v*.apk,*/FitBuddyAI-v*.ipa"
+          tag: v${{ needs.build_android.outputs.version }}
           token: ${{ secrets.TOKEN }}

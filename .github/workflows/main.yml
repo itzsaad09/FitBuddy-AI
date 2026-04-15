@@ -9,9 +9,6 @@ on:
       - main
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build_android:
     name: Build Android
@@ -65,21 +62,27 @@ jobs:
       - name: Get Version
         id: get_version
         run: |
-          VERSION_NAME=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
-          BUILD_NUMBER=${{ github.run_number }}
-          FULL_VERSION="${VERSION_NAME}+${BUILD_NUMBER}"
-          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-          echo "VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
+          # Read the base version from pubspec.yaml (e.g., 1.0.0)
+          BASE_VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
+          RUN_NUMBER=${{ github.run_number }}
+          # Dynamic version: 1.0.0.45
+          DYNAMIC_VERSION="${BASE_VERSION}.${RUN_NUMBER}"
+
+          echo "BASE_VERSION=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "RUN_NUMBER=$RUN_NUMBER" >> $GITHUB_OUTPUT
+          echo "VERSION=$DYNAMIC_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build APK
         run: |
           flutter clean
           flutter pub get
-          flutter build apk --release --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
+          # 1. Build using the dynamic run number
+          flutter build apk --release --build-name=${{ steps.get_version.outputs.VERSION }} --build-number=${{ steps.get_version.outputs.RUN_NUMBER }}
 
       - name: Rename & Upload
-        run: mv build/app/outputs/flutter-apk/app-release.apk "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk"
+        run: |
+          # 2. Rename the file using the dynamic version
+          mv build/app/outputs/flutter-apk/app-release.apk "FitBuddyAI-v${{ steps.get_version.outputs.VERSION }}.apk"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -131,18 +134,20 @@ jobs:
       - name: Get Version
         id: get_version
         run: |
-          VERSION_NAME=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
-          BUILD_NUMBER=${{ github.run_number }}
-          FULL_VERSION="${VERSION_NAME}+${BUILD_NUMBER}"
-          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
-          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_OUTPUT
-          echo "VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
+          BASE_VERSION=$(grep 'version:' pubspec.yaml | cut -d ' ' -f 2 | cut -d '+' -f 1 | tr -d '\r')
+          RUN_NUMBER=${{ github.run_number }}
+          DYNAMIC_VERSION="${BASE_VERSION}.${RUN_NUMBER}"
+
+          echo "BASE_VERSION=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "RUN_NUMBER=$RUN_NUMBER" >> $GITHUB_OUTPUT
+          echo "VERSION=$DYNAMIC_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build iOS
         run: |
           flutter clean
           flutter pub get
-          flutter build ios --release --no-codesign --build-name=${{ steps.get_version.outputs.VERSION_NAME }} --build-number=${{ steps.get_version.outputs.BUILD_NUMBER }}
+          # 1. Build using the dynamic run number
+          flutter build ios --release --no-codesign --build-name=${{ steps.get_version.outputs.VERSION }} --build-number=${{ steps.get_version.outputs.RUN_NUMBER }}
 
       - name: Create IPA
         run: |
@@ -168,5 +173,6 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "*/FitBuddyAI-v*.apk,*/FitBuddyAI-v*.ipa"
+          # 3. Use the dynamic version as the Tag so every build is a new release
           tag: v${{ needs.build_android.outputs.version }}
           token: ${{ secrets.TOKEN }}

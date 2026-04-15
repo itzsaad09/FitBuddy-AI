@@ -54,23 +54,43 @@ class ApiService {
     if (_cachedCsvExercises != null) return _cachedCsvExercises!;
 
     try {
-      String csvString = await rootBundle.loadString('assets/exercises.csv');
+      final String rawData = await rootBundle.loadString(
+        'assets/exercises.csv',
+      );
 
-      // Strip UTF-8 BOM if present (common issue in Linux builds/CI)
-      if (csvString.startsWith('\uFEFF')) {
-        csvString = csvString.substring(1);
+      // 1. Strip UTF-8 BOM if present
+      String data = rawData;
+      if (data.startsWith('\uFEFF')) {
+        data = data.substring(1);
       }
 
-      debugPrint('CSV loaded. Bytes: ${csvString.length}');
-      final List<List<dynamic>> rows = const CsvToListConverter().convert(
-        csvString,
+      // 2. Safe line splitting (handles Linux/Windows line endings)
+      final List<String> lines = data.split(RegExp(r'\r?\n'));
+
+      final List<List<dynamic>> rows = [];
+      final CsvToListConverter converter = const CsvToListConverter(
+        shouldParseNumbers: false,
       );
+
+      // 3. Process each line safely
+      for (var line in lines) {
+        final trimmedLine = line.trim();
+        if (trimmedLine.isEmpty) continue;
+
+        // Use the robust converter for each line to handle quoted commas correctly
+        final List<List<dynamic>> parsedLine = converter.convert(trimmedLine);
+        if (parsedLine.isNotEmpty) {
+          rows.add(parsedLine.first);
+        }
+      }
 
       if (rows.isEmpty) return [];
 
+      // 4. Map columns to headers
       final headers = rows.first
           .map((e) => e.toString().toLowerCase().trim().replaceAll('"', ''))
           .toList();
+
       final List<Exercise> exercises = [];
 
       for (int i = 1; i < rows.length; i++) {
@@ -81,7 +101,7 @@ class ApiService {
         for (int j = 0; j < headers.length; j++) {
           if (j < row.length) {
             String value = row[j].toString().trim();
-            // Remove literal outer quotes if the parser didn't strip them
+            // Remove literal outer quotes if present
             if (value.startsWith('"') && value.endsWith('"')) {
               value = value.substring(1, value.length - 1);
             }
@@ -92,6 +112,7 @@ class ApiService {
       }
 
       _cachedCsvExercises = exercises;
+      debugPrint('Successfully loaded ${exercises.length} exercises from CSV.');
       return exercises;
     } catch (e) {
       debugPrint('Error loading exercises from CSV: $e');

@@ -1,7 +1,6 @@
 import cv2
-import mediapipe as mp
-import mediapipe.python.solutions.pose as mp_pose
-import mediapipe.python.solutions.drawing_utils as mp_drawing
+from mediapipe.solutions import pose as mp_pose
+from mediapipe.solutions import drawing_utils as mp_drawing
 
 pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tracking_confidence=0.5)
 

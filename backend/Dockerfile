@@ -26,4 +26,4 @@ ENV PORT=10000
 EXPOSE ${PORT}
 
 # gunicorn for production — Flask dev server is NOT suitable for Render
-CMD gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 2 --timeout 120 app:app
+CMD gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 2 --timeout 120 main:app

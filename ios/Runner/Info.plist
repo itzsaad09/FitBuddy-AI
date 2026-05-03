@@ -47,5 +47,7 @@
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<false/>
+		<key>NSCameraUsageDescription</key>
+		<string>Camera access is required to detect human joints and perform AI-powered fitness analysis.</string>
 	</dict>
 </plist>

@@ -3,6 +3,7 @@ import 'package:fitbuddy_ai/models/exercise.dart';
 import 'package:fitbuddy_ai/services/api_service.dart';
 import 'package:fitbuddy_ai/widgets/cached_gif.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:fitbuddy_ai/screens/workout_with_ai_screen.dart';
 
 class ExerciseDetailScreen extends StatefulWidget {
   final Exercise exercise;
@@ -238,10 +239,10 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
           child: ElevatedButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Starting Workout with AI...'),
-                  duration: Duration(seconds: 2),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const WorkoutWithAiScreen(),
                 ),
               );
             },

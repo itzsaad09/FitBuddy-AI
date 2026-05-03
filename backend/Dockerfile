@@ -1,4 +1,4 @@
-# ── Stage: runtime ───────────────────────────────────────────────────────────
+# ── Runtime image ─────────────────────────────────────────────────────────────
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -14,17 +14,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgthread-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first (layer-cache friendly)
-COPY requirements.txt .
+# Build context is the REPO ROOT on Render, so paths are relative to that
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source
-COPY . .
+COPY backend/ .
 
 # Render injects $PORT at runtime; default to 10000 for local testing
 ENV PORT=10000
 
 EXPOSE ${PORT}
 
-# Use gunicorn for production — Flask dev server is NOT suitable for Render
+# gunicorn for production — Flask dev server is NOT suitable for Render
 CMD gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 2 --timeout 120 app:app

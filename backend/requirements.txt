@@ -1,5 +1,6 @@
-flask
-flask-cors
-mediapipe
-opencv-python-headless
-numpy
+flask==3.0.3
+flask-cors==4.0.1
+mediapipe==0.10.14
+opencv-python-headless==4.10.0.84
+numpy==1.26.4
+gunicorn==22.0.0

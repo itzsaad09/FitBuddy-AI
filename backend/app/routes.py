@@ -6,6 +6,10 @@ from .services.pose_detector import detect_pose_landmarks
 
 main_bp = Blueprint('main', __name__)
 
+@main_bp.route('/', methods=['GET'])
+def health_check():
+    return jsonify({'status': 'ok', 'message': 'FitBuddy AI backend is running'}), 200
+
 @main_bp.route('/detect', methods=['POST'])
 def detect_pose():
     try:

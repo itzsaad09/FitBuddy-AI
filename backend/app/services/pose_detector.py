@@ -12,12 +12,12 @@ def get_pose_model():
             _pose_model = mp_pose.Pose(
                 static_image_mode=True, 
                 model_complexity=1,
-                min_detection_confidence=0.1, # Extremely sensitive
+                min_detection_confidence=0.1,
                 min_tracking_confidence=0.1
             )
-            print("MediaPipe Pose (DEBUG MODE) initialized.")
+            print("MediaPipe Pose initialized.")
         except Exception as e:
-            print(f"ERROR: {e}")
+            print(f"ERROR INITIALIZING MEDIAPIPE: {e}")
     return _pose_model
 
 def process_pose_image(image):
@@ -27,9 +27,10 @@ def process_pose_image(image):
         
         pose = get_pose_model()
         if pose is None or image is None:
+            print("ERROR: Pose model or Image is None")
             return None
 
-        # Try multiple rotations to find the person
+        # Try multiple rotations
         rotations = [0, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]
         best_results = None
         best_img = None
@@ -45,7 +46,7 @@ def process_pose_image(image):
                 found_rot = rot
                 break
 
-        # 2. If person found, draw on THAT image
+        # Draw results
         if best_results and best_img is not None:
             mp_drawing.draw_landmarks(
                 best_img, 
@@ -54,7 +55,6 @@ def process_pose_image(image):
                 mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=6, circle_radius=4),
                 mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=6, circle_radius=2)
             )
-            
             # Rotate back
             if found_rot == cv2.ROTATE_90_CLOCKWISE:
                 image = cv2.rotate(best_img, cv2.ROTATE_90_COUNTERCLOCKWISE)
@@ -64,17 +64,15 @@ def process_pose_image(image):
                 image = cv2.rotate(best_img, cv2.ROTATE_180)
             else:
                 image = best_img
-            
-            # Draw "POSE DETECTED" in green
             cv2.putText(image, "POSE DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         else:
-            # Draw "NO POSE FOUND" in red if AI fails
             cv2.putText(image, "NO POSE FOUND", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        # 3. Encode to base64
+        # Encode to base64
         _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+        print("DEBUG: Successfully encoded image and sending to frontend.")
         return base64.b64encode(buffer).decode('utf-8')
         
     except Exception as e:
-        print(f"Processing error: {e}")
+        print(f"PROCESSING CRASH: {e}")
         return None

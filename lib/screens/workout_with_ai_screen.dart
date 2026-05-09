@@ -40,6 +40,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
       }
     }
     _backendUrl = url;
+    print('DEBUG: Connecting to: $_backendUrl');
   }
 
   Future<void> _initializeCamera() async {
@@ -53,7 +54,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
 
         _controller = CameraController(
           selectedCamera,
-          ResolutionPreset.medium,
+          ResolutionPreset.low, // 'low' is critical for network speed
           enableAudio: false,
         );
 
@@ -66,7 +67,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Camera error: $e');
+      print('DEBUG: Camera error: $e');
     }
   }
 
@@ -84,32 +85,40 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     });
 
     try {
+      print('DEBUG: Sending frame...');
       final XFile image = await _controller!.takePicture();
       final url = Uri.parse(_backendUrl);
       final request = http.MultipartRequest('POST', url);
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 10));
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 15));
       final response = await http.Response.fromStream(streamedResponse);
+      
+      print('DEBUG: Response received. Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
         final base64Image = decoded['image'];
         
         if (base64Image != null && mounted) {
+          print('DEBUG: Image decoded. Length: ${base64Image.length}');
           setState(() {
             _processedImageBytes = base64.decode(base64Image);
           });
+        } else {
+          print('DEBUG: Response 200 but "image" field is null');
         }
+      } else {
+        print('DEBUG: Server Error Body: ${response.body}');
       }
     } catch (e) {
-      debugPrint('Network error: $e');
+      print('DEBUG: Loop Error: $e');
     } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
         });
-        Future.delayed(const Duration(milliseconds: 10), _processFrameLoop);
+        Future.delayed(const Duration(milliseconds: 100), _processFrameLoop);
       }
     }
   }
@@ -156,11 +165,17 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                           children: [
                             CameraPreview(_controller!),
                             
-                            // Display the processed "video" frame from Python
+                            // Display the processed image from Python
                             if (_processedImageBytes != null)
-                              Image.memory(
-                                _processedImageBytes!,
-                                fit: BoxFit.cover,
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.yellow, width: 2), // YELLOW BORDER FOR DEBUG
+                                ),
+                                child: Image.memory(
+                                  _processedImageBytes!,
+                                  fit: BoxFit.cover,
+                                  gaplessPlayback: true,
+                                ),
                               ),
                               
                             Positioned(
@@ -177,9 +192,9 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                                   children: [
                                     Icon(Icons.circle, color: _isProcessing ? Colors.orange : Colors.green, size: 10),
                                     const SizedBox(width: 8),
-                                    const Text(
-                                      'PYTHON VIDEO LIVE',
-                                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                                    Text(
+                                      _isProcessing ? 'SENDING...' : 'RECEIVING',
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                                     ),
                                   ],
                                 ),

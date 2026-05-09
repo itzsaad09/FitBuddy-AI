@@ -1,31 +1,29 @@
-# Use a lightweight Python image
+# ── Runtime image ─────────────────────────────────────────────────────────────
 FROM python:3.10-slim
 
-# Install system dependencies for OpenCV and MediaPipe
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+WORKDIR /app
+
+# System dependencies required by OpenCV (headless) and MediaPipe
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
+    libgl1 \
+    libgomp1 \
+    libgthread-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /app
-
-# Install dependencies first for better caching
-COPY requirements.txt .
+# Build context is the REPO ROOT on Render, so paths are relative to that
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
-COPY . .
+COPY backend/ .
 
-# Set environment variables for production
+# Render injects $PORT at runtime; default to 10000 for local testing
 ENV PORT=10000
-ENV PYTHONUNBUFFERED=1
 
-# Expose the port Render expects
-EXPOSE 10000
+EXPOSE ${PORT}
 
-# Start with Gunicorn (using gthread workers for MediaPipe stability)
-CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --worker-class gthread main:app
+# gunicorn for production — 1 worker and 1 thread is safest for MediaPipe on Render Free Tier
+CMD gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 1 --timeout 120 main:app

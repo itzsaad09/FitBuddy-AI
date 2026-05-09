@@ -7,7 +7,7 @@ _pose_model = None
 def get_pose_model():
     """
     Lazily initializes the MediaPipe Pose model.
-    Uses static_image_mode=False for better performance in video streams.
+    Using static_image_mode=True is REQUIRED for REST APIs.
     """
     global _pose_model
     if _pose_model is None:
@@ -15,14 +15,15 @@ def get_pose_model():
             import mediapipe as mp
             mp_pose = mp.solutions.pose
             
-            # Using model_complexity=0 for low-latency cloud execution
+            # static_image_mode=True: Treats each request as a standalone image.
+            # This is the ONLY stable way to run on Render/REST APIs.
             _pose_model = mp_pose.Pose(
-                static_image_mode=False, 
+                static_image_mode=True, 
                 model_complexity=0,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
+                min_detection_confidence=0.3,
+                min_tracking_confidence=0.3
             )
-            print("AI: Pose model initialized successfully")
+            print("AI: Pose model initialized successfully (Cloud Mode)")
         except Exception as e:
             print(f"AI ERROR during initialization: {e}")
     return _pose_model

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 class WorkoutWithAiScreen extends StatefulWidget {
   const WorkoutWithAiScreen({super.key});
@@ -26,6 +27,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     super.initState();
     _loadUrl();
     _initializeCamera();
+    WakelockPlus.enable(); // Keep screen on
   }
 
   void _loadUrl() {
@@ -133,6 +135,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
 
   @override
   void dispose() {
+    WakelockPlus.disable(); // Allow screen to sleep again
     _controller?.dispose();
     super.dispose();
   }

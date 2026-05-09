@@ -12,6 +12,7 @@
 .swiftpm/
 migrate_working_dir/
 *.env
+*venv
 
 # IntelliJ related
 *.iml
@@ -44,6 +45,3 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
-
-# Firebase related
-lib/firebase_options.dart

@@ -1,5 +1,4 @@
 import cv2
-import base64
 import numpy as np
 
 # Global model variable
@@ -9,59 +8,47 @@ def get_pose_model():
     global _pose_model
     if _pose_model is None:
         try:
-            # Import inside here to prevent startup crashes
-            from mediapipe.solutions import pose as mp_pose
+            # Lazy import to avoid startup conflicts
+            import mediapipe as mp
+            mp_pose = mp.solutions.pose
             
-            # model_complexity=0 is the LIGHTEST possible model for weak servers
+            # static_image_mode=True is REQUIRED for individual frames
             _pose_model = mp_pose.Pose(
                 static_image_mode=True, 
                 model_complexity=0,
                 min_detection_confidence=0.3,
                 min_tracking_confidence=0.3
             )
-            print("AI MODEL LOADED: Complexity 0 (Lightweight)")
+            print("AI: Pose model initialized (JSON Mode)")
         except Exception as e:
-            print(f"FATAL: Could not load MediaPipe: {e}")
+            print(f"AI ERROR: {e}")
     return _pose_model
 
 def process_pose_image(image):
+    """
+    Processes an image and returns ONLY the landmark coordinates.
+    """
     try:
-        # Import utilities at top level of function
-        from mediapipe.solutions import pose as mp_pose
-        from mediapipe.solutions import drawing_utils as mp_drawing
-        
         pose = get_pose_model()
-        if pose is None:
-            print("ERROR: AI Model is None. Possible memory issue on server.")
-            return None
-            
-        if image is None:
-            print("ERROR: Received empty image")
+        if pose is None or image is None:
             return None
 
-        # Convert to RGB
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
-        # Run AI detection
-        results = pose.process(rgb)
+        # MediaPipe requires RGB
+        rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = pose.process(rgb_image)
 
-        # Draw even if no pose found (the debug text)
+        # Extract landmark data
+        landmarks_data = []
         if results.pose_landmarks:
-            mp_drawing.draw_landmarks(
-                image, 
-                results.pose_landmarks, 
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=5, circle_radius=3),
-                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=5, circle_radius=1)
-            )
-            cv2.putText(image, "POSE DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        else:
-            cv2.putText(image, "NO POSE FOUND", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-        # Encode back to base64
-        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-        return base64.b64encode(buffer).decode('utf-8')
+            for lm in results.pose_landmarks.landmark:
+                landmarks_data.append({
+                    'x': float(lm.x),
+                    'y': float(lm.y),
+                    'v': float(lm.visibility)
+                })
+        
+        return landmarks_data
         
     except Exception as e:
-        print(f"PROCESS_POSE_IMAGE CRASHED: {e}")
+        print(f"AI ERROR: {e}")
         return None

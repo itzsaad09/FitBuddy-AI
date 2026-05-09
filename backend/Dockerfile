@@ -1,29 +1,31 @@
-# ── Runtime image ─────────────────────────────────────────────────────────────
+# Use a lightweight Python image
 FROM python:3.10-slim
 
-WORKDIR /app
-
-# System dependencies required by OpenCV (headless) and MediaPipe
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies for OpenCV and MediaPipe
+RUN apt-get update && apt-get install -y \
+    libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender1 \
-    libgl1 \
-    libgomp1 \
-    libgthread-2.0-0 \
+    libxrender-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Build context is the REPO ROOT on Render, so paths are relative to that
-COPY backend/requirements.txt .
+# Set working directory
+WORKDIR /app
+
+# Install dependencies first for better caching
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ .
+# Copy the rest of the application
+COPY . .
 
-# Render injects $PORT at runtime; default to 10000 for local testing
+# Set environment variables for production
 ENV PORT=10000
+ENV PYTHONUNBUFFERED=1
 
-EXPOSE ${PORT}
+# Expose the port Render expects
+EXPOSE 10000
 
-# gunicorn for production — Flask dev server is NOT suitable for Render
-CMD gunicorn --bind 0.0.0.0:${PORT} --workers 1 --threads 2 --timeout 120 main:app
+# Start with Gunicorn (using gthread workers for MediaPipe stability)
+CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --worker-class gthread main:app

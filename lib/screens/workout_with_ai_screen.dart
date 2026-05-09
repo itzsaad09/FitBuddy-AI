@@ -80,7 +80,9 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
         final url = Uri.parse(_backendUrl);
 
         final request = http.MultipartRequest('POST', url);
-        request.files.add(await http.MultipartFile.fromPath('image', image.path));
+        request.files.add(
+          await http.MultipartFile.fromPath('image', image.path),
+        );
 
         final response = await request.send();
         if (response.statusCode == 200) {
@@ -140,7 +142,9 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.primary.withOpacity(0.2),
                       width: 1.5,
                     ),
                   ),
@@ -194,9 +198,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                             ],
                           ),
                         )
-                      : const Center(
-                          child: CircularProgressIndicator(),
-                        ),
+                      : const Center(child: CircularProgressIndicator()),
                 ),
               ),
               const SizedBox(height: 24),

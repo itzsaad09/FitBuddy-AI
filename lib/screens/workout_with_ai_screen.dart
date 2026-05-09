@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
@@ -18,9 +17,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
   bool _isProcessing = false;
-  Timer? _timer;
 
-  Uint8List? _processedImageBytes;
+  List<dynamic>? _landmarks;
   String _backendUrl = '';
 
   @override
@@ -54,7 +52,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
           setState(() {
             _isCameraInitialized = true;
           });
-          _startPoseDetection();
+          _processFrameLoop();
         }
       }
     } catch (e) {
@@ -62,54 +60,51 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     }
   }
 
-  void _startPoseDetection() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
-      if (_controller == null || !_controller!.value.isInitialized) return;
-      if (_isProcessing) return;
-      if (_backendUrl.isEmpty) return;
+  Future<void> _processFrameLoop() async {
+    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
+    if (_isProcessing) return;
+    if (_backendUrl.isEmpty) {
+      Future.delayed(const Duration(seconds: 1), _processFrameLoop);
+      return;
+    }
 
-      if (mounted) {
-        setState(() {
-          _isProcessing = true;
-        });
-      }
+    setState(() {
+      _isProcessing = true;
+    });
 
-      try {
-        final XFile image = await _controller!.takePicture();
-        final url = Uri.parse(_backendUrl);
+    try {
+      final XFile image = await _controller!.takePicture();
+      final url = Uri.parse(_backendUrl);
 
-        final request = http.MultipartRequest('POST', url);
-        request.files.add(
-          await http.MultipartFile.fromPath('image', image.path),
-        );
+      final request = http.MultipartRequest('POST', url);
+      request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
-        final response = await request.send();
-        if (response.statusCode == 200) {
-          final respBody = await response.stream.bytesToString();
-          final decoded = json.decode(respBody);
-          final base64Image = decoded['image'];
-          if (base64Image != null && mounted) {
-            setState(() {
-              _processedImageBytes = base64.decode(base64Image);
-            });
-          }
-        }
-      } catch (e) {
-        debugPrint('Error sending image to backend: $e');
-      } finally {
-        if (mounted) {
+      final response = await request.send().timeout(const Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        final respBody = await response.stream.bytesToString();
+        final decoded = json.decode(respBody);
+        final landmarks = decoded['landmarks'];
+        if (landmarks != null && mounted) {
           setState(() {
-            _isProcessing = false;
+            _landmarks = landmarks;
           });
         }
       }
-    });
+    } catch (e) {
+      debugPrint('Python Backend frame error: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+        Future.delayed(const Duration(milliseconds: 30), _processFrameLoop);
+      }
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -119,7 +114,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'AI DETECTING JOINTS',
+          'AI ZERO LAG CAMERA',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -142,61 +137,59 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.primary.withOpacity(0.2),
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
                       width: 1.5,
                     ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: _isCameraInitialized && _controller != null
-                      ? AspectRatio(
-                          aspectRatio: _controller!.value.aspectRatio,
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              CameraPreview(_controller!),
-                              if (_processedImageBytes != null)
-                                Image.memory(
-                                  _processedImageBytes!,
-                                  fit: BoxFit.cover,
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            // 1. Local camera runs at full 30 FPS with NO LAG
+                            CameraPreview(_controller!),
+                            
+                            // 2. Overlay drawing landmarks returned by Python
+                            if (_landmarks != null)
+                              CustomPaint(
+                                painter: LandmarkPainter(_landmarks!),
+                              ),
+
+                            Positioned(
+                              top: 16,
+                              right: 16,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
                                 ),
-                              Positioned(
-                                top: 16,
-                                right: 16,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.6),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.circle,
-                                        color: Colors.green,
-                                        size: 10,
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.bolt_rounded,
+                                      color: Colors.yellow,
+                                      size: 10,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'AI STREAMING COORDINATES',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 1,
                                       ),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'LIVE POSE ACTIVE',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 1,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         )
                       : const Center(child: CircularProgressIndicator()),
                 ),
@@ -237,4 +230,70 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
       ),
     );
   }
+}
+
+class LandmarkPainter extends CustomPainter {
+  final List<dynamic> landmarks;
+
+  LandmarkPainter(this.landmarks);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.greenAccent
+      ..strokeWidth = 3.0
+      ..strokeCap = StrokeCap.round;
+
+    final dotPaint = Paint()
+      ..color = Colors.redAccent
+      ..style = PaintingStyle.fill;
+
+    // Helper to draw a line between two landmarks
+    void drawLine(int i1, int i2) {
+      if (i1 < landmarks.length && i2 < landmarks.length) {
+        final lm1 = landmarks[i1];
+        final lm2 = landmarks[i2];
+        
+        // Landmarks are normalized (0 to 1), so multiply by screen size
+        // We use size.width - ... for X to handle the selfie mirroring
+        canvas.drawLine(
+          Offset(size.width - (lm1['x'] * size.width), lm1['y'] * size.height),
+          Offset(size.width - (lm2['x'] * size.width), lm2['y'] * size.height),
+          paint,
+        );
+      }
+    }
+
+    // Connect joints (Standard MediaPipe Pose connections)
+    // Shoulders
+    drawLine(11, 12);
+    // Arms
+    drawLine(11, 13);
+    drawLine(13, 15);
+    drawLine(12, 14);
+    drawLine(14, 16);
+    // Torso
+    drawLine(11, 23);
+    drawLine(12, 24);
+    drawLine(23, 24);
+    // Legs
+    drawLine(23, 25);
+    drawLine(25, 27);
+    drawLine(24, 26);
+    drawLine(26, 28);
+
+    // Draw dots for joints
+    for (var lm in landmarks) {
+      if (lm['visibility'] > 0.5) {
+        canvas.drawCircle(
+          Offset(size.width - (lm['x'] * size.width), lm['y'] * size.height),
+          3,
+          dotPaint,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) => true;
 }

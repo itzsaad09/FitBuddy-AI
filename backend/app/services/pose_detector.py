@@ -5,8 +5,7 @@ _pose_model = None
 def get_pose_model():
     global _pose_model
     if _pose_model is None:
-        import mediapipe as mp
-        mp_pose = mp.solutions.pose
+        from mediapipe.solutions import pose as mp_pose
         _pose_model = mp_pose.Pose(
             static_image_mode=False,
             min_detection_confidence=0.5,
@@ -14,28 +13,26 @@ def get_pose_model():
         )
     return _pose_model
 
-def detect_pose_landmarks(image):
+def get_pose_landmarks(image):
+    """
+    Processes the image and returns a list of landmarks with (x, y, z, visibility).
+    Does NOT draw on the image to save CPU.
+    """
     try:
-        import mediapipe as mp
-        mp_pose = mp.solutions.pose
-        mp_drawing = mp.solutions.drawing_utils
-
         pose = get_pose_model()
-
-        # Convert to RGB for MediaPipe
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb_image)
 
-        # Draw on the original image
+        landmarks = []
         if results.pose_landmarks:
-            mp_drawing.draw_landmarks(
-                image,
-                results.pose_landmarks,
-                mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=5, circle_radius=4), # joints
-                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=4, circle_radius=2)  # connections
-            )
+            for lm in results.pose_landmarks.landmark:
+                landmarks.append({
+                    'x': lm.x,
+                    'y': lm.y,
+                    'z': lm.z,
+                    'visibility': lm.visibility
+                })
+        return landmarks
     except Exception as e:
         print(f"Error in pose detection: {e}")
-
-    return image
+        return []

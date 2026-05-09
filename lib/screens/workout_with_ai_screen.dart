@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
@@ -19,7 +20,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
   bool _isCameraInitialized = false;
   bool _isProcessing = false;
 
-  List<dynamic>? _landmarks;
+  Uint8List? _processedImageBytes;
   String _backendUrl = '';
 
   @override
@@ -27,7 +28,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     super.initState();
     _loadUrl();
     _initializeCamera();
-    WakelockPlus.enable(); // Keep screen on
+    WakelockPlus.enable();
   }
 
   void _loadUrl() {
@@ -39,7 +40,6 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
       }
     }
     _backendUrl = url;
-    print('DEBUG: Target Backend URL is: "$_backendUrl"');
   }
 
   Future<void> _initializeCamera() async {
@@ -53,7 +53,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
 
         _controller = CameraController(
           selectedCamera,
-          ResolutionPreset.medium, // Changed to medium for better AI detection
+          ResolutionPreset.medium,
           enableAudio: false,
         );
 
@@ -62,24 +62,19 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
           setState(() {
             _isCameraInitialized = true;
           });
-          print('DEBUG: Camera initialized. Starting loop...');
           _processFrameLoop();
         }
       }
     } catch (e) {
-      print('DEBUG: Camera error: $e');
+      debugPrint('Camera error: $e');
     }
   }
 
   Future<void> _processFrameLoop() async {
-    if (!mounted || _controller == null || !_controller!.value.isInitialized) {
-      print('DEBUG: Loop aborted - controller not ready');
-      return;
-    }
+    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
     if (_isProcessing) return;
     
     if (_backendUrl.isEmpty) {
-      print('DEBUG: Error - Backend URL is empty! Check your .env file.');
       Future.delayed(const Duration(seconds: 2), _processFrameLoop);
       return;
     }
@@ -89,53 +84,39 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     });
 
     try {
-      print('DEBUG: 1. Capturing picture...');
       final XFile image = await _controller!.takePicture();
-      print('DEBUG: 2. Picture saved at ${image.path}. Sending to backend...');
-
       final url = Uri.parse(_backendUrl);
       final request = http.MultipartRequest('POST', url);
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
-      print('DEBUG: 3. Request sent. Waiting for Python response...');
       final streamedResponse = await request.send().timeout(const Duration(seconds: 10));
       final response = await http.Response.fromStream(streamedResponse);
-
-      print('DEBUG: 4. Received Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final decoded = json.decode(response.body);
-        final landmarks = decoded['landmarks'];
+        final base64Image = decoded['image'];
         
-        if (landmarks != null) {
-          print('DEBUG: SUCCESS! Received ${landmarks.length} landmarks.');
-          if (mounted) {
-            setState(() {
-              _landmarks = landmarks;
-            });
-          }
-        } else {
-          print('DEBUG: Error - Backend returned 200 but no "landmarks" key found.');
+        if (base64Image != null && mounted) {
+          setState(() {
+            _processedImageBytes = base64.decode(base64Image);
+          });
         }
-      } else {
-        print('DEBUG: Backend error: ${response.body}');
       }
     } catch (e) {
-      print('DEBUG: Network/Request failed: $e');
+      debugPrint('Network error: $e');
     } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
         });
-        // Wait a bit before next attempt to prevent overwhelming the server
-        Future.delayed(const Duration(milliseconds: 100), _processFrameLoop);
+        Future.delayed(const Duration(milliseconds: 10), _processFrameLoop);
       }
     }
   }
 
   @override
   void dispose() {
-    WakelockPlus.disable(); // Allow screen to sleep again
+    WakelockPlus.disable();
     _controller?.dispose();
     super.dispose();
   }
@@ -145,7 +126,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'AI LIVE TRACKING',
+          'AI WORKOUT REAL-TIME',
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 2),
         ),
         backgroundColor: Colors.transparent,
@@ -174,10 +155,14 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                           fit: StackFit.expand,
                           children: [
                             CameraPreview(_controller!),
-                            if (_landmarks != null && _landmarks!.isNotEmpty)
-                              CustomPaint(
-                                painter: LandmarkPainter(_landmarks!),
+                            
+                            // Display the processed "video" frame from Python
+                            if (_processedImageBytes != null)
+                              Image.memory(
+                                _processedImageBytes!,
+                                fit: BoxFit.cover,
                               ),
+                              
                             Positioned(
                               top: 16,
                               right: 16,
@@ -192,9 +177,9 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                                   children: [
                                     Icon(Icons.circle, color: _isProcessing ? Colors.orange : Colors.green, size: 10),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      _isProcessing ? 'AI THINKING...' : 'LIVE TRACKING',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
+                                    const Text(
+                                      'PYTHON VIDEO LIVE',
+                                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                                     ),
                                   ],
                                 ),
@@ -222,37 +207,4 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
       ),
     );
   }
-}
-
-class LandmarkPainter extends CustomPainter {
-  final List<dynamic> landmarks;
-  LandmarkPainter(this.landmarks);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.greenAccent..strokeWidth = 4.0..strokeCap = StrokeCap.round;
-    final dotPaint = Paint()..color = Colors.red..style = PaintingStyle.fill;
-
-    void drawLine(int i1, int i2) {
-      if (i1 < landmarks.length && i2 < landmarks.length) {
-        final lm1 = landmarks[i1]; final lm2 = landmarks[i2];
-        canvas.drawLine(
-          Offset(size.width - (lm1['x'] * size.width), lm1['y'] * size.height),
-          Offset(size.width - (lm2['x'] * size.width), lm2['y'] * size.height),
-          paint,
-        );
-      }
-    }
-
-    drawLine(11, 12); drawLine(11, 13); drawLine(13, 15); drawLine(12, 14); drawLine(14, 16);
-    drawLine(11, 23); drawLine(12, 24); drawLine(23, 24); drawLine(23, 25); drawLine(25, 27);
-    drawLine(24, 26); drawLine(26, 28);
-
-    for (var lm in landmarks) {
-      canvas.drawCircle(Offset(size.width - (lm['x'] * size.width), lm['y'] * size.height), 4, dotPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
 }

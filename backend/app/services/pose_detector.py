@@ -1,4 +1,5 @@
 import cv2
+import base64
 import numpy as np
 
 _pose_model = None
@@ -9,64 +10,47 @@ def get_pose_model():
         try:
             from mediapipe.solutions import pose as mp_pose
             _pose_model = mp_pose.Pose(
-                static_image_mode=True, 
-                model_complexity=1,
-                min_detection_confidence=0.3,
-                min_tracking_confidence=0.3
+                static_image_mode=False, # Optimized for video/real-time
+                model_complexity=0,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5
             )
-            print("MediaPipe Pose (Static + coordinate-fix) initialized.")
+            print("MediaPipe Pose (VIDEO MODE) initialized.")
         except Exception as e:
-            print(f"FAILED to initialize MediaPipe: {e}")
+            print(f"CRITICAL ERROR: {e}")
     return _pose_model
 
-def get_pose_landmarks(image):
+def process_pose_image(image):
+    """
+    Detects pose, draws skeleton on the image, and returns base64 string.
+    """
     try:
+        from mediapipe.solutions import pose as mp_pose
+        from mediapipe.solutions import drawing_utils as mp_drawing
+        
         pose = get_pose_model()
         if pose is None or image is None:
-            return []
+            return None
 
-        # Try 1: Original
+        # Process image
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = pose.process(rgb)
-        rotation = 0
 
-        # Try 2: Rotate if failed
-        if not results.pose_landmarks:
-            rotated = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
-            rgb = cv2.cvtColor(rotated, cv2.COLOR_BGR2RGB)
-            results = pose.process(rgb)
-            rotation = 90
-            
-        if not results.pose_landmarks:
-            rotated = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            rgb = cv2.cvtColor(rotated, cv2.COLOR_BGR2RGB)
-            results = pose.process(rgb)
-            rotation = 270
-
-        landmarks = []
+        # Draw skeleton if found
         if results.pose_landmarks:
-            for lm in results.pose_landmarks.landmark:
-                x, y = lm.x, lm.y
-                
-                # ROTATE COORDINATES BACK TO MATCH PHONE SCREEN
-                if rotation == 90:
-                    final_x = y
-                    final_y = 1 - x
-                elif rotation == 270:
-                    final_x = 1 - y
-                    final_y = x
-                else:
-                    final_x = x
-                    final_y = y
+            mp_drawing.draw_landmarks(
+                image, 
+                results.pose_landmarks, 
+                mp_pose.POSE_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
+                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2, circle_radius=1)
+            )
 
-                landmarks.append({
-                    'x': final_x,
-                    'y': final_y,
-                    'z': lm.z,
-                    'visibility': lm.visibility
-                })
-            print(f"DEBUG: Found pose with rotation {rotation}")
-        return landmarks
+        # Encode back to base64
+        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        base64_str = base64.b64encode(buffer).decode('utf-8')
+        
+        return base64_str
     except Exception as e:
-        print(f"DEBUG ERROR: {e}")
-        return []
+        print(f"Error: {e}")
+        return None

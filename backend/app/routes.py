@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 import cv2
 import numpy as np
-from .services.pose_detector import get_pose_landmarks
+from .services.pose_detector import process_pose_image
 
 main_bp = Blueprint('main', __name__)
 
@@ -18,12 +18,14 @@ def detect_pose():
 
         np_img = np.frombuffer(file.read(), np.uint8)
         image = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-        if image is None:
-            return jsonify({'error': 'Invalid image'}), 400
+        
+        # Get base64 image from Python AI
+        base64_image = process_pose_image(image)
 
-        # Return landmarks instead of the processed image
-        landmarks = get_pose_landmarks(image)
-
-        return jsonify({'landmarks': landmarks})
+        if base64_image:
+            return jsonify({'image': base64_image})
+        else:
+            return jsonify({'error': 'Processing failed'}), 500
+            
     except Exception as e:
         return jsonify({'error': str(e)}), 500

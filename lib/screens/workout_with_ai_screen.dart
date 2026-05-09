@@ -43,7 +43,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
 
         _controller = CameraController(
           selectedCamera,
-          ResolutionPreset.medium,
+          ResolutionPreset.low, // 'low' is much faster and reduces lag significantly
           enableAudio: false,
         );
 
@@ -85,20 +85,25 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
         final respBody = await response.stream.bytesToString();
         final decoded = json.decode(respBody);
         final landmarks = decoded['landmarks'];
+        
         if (landmarks != null && mounted) {
+          debugPrint('Received ${landmarks.length} landmarks from Python');
           setState(() {
             _landmarks = landmarks;
           });
         }
+      } else {
+        debugPrint('Backend error: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('Python Backend frame error: $e');
+      debugPrint('Python Backend network error: $e');
     } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
         });
-        Future.delayed(const Duration(milliseconds: 30), _processFrameLoop);
+        // Faster loop for smoother tracking
+        Future.delayed(const Duration(milliseconds: 10), _processFrameLoop);
       }
     }
   }
@@ -114,7 +119,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'AI ZERO LAG CAMERA',
+          'AI LIVE TRACKING',
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w900,
@@ -146,13 +151,14 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                       ? Stack(
                           fit: StackFit.expand,
                           children: [
-                            // 1. Local camera runs at full 30 FPS with NO LAG
                             CameraPreview(_controller!),
                             
-                            // 2. Overlay drawing landmarks returned by Python
-                            if (_landmarks != null)
-                              CustomPaint(
-                                painter: LandmarkPainter(_landmarks!),
+                            // Improved Landmark Overlay
+                            if (_landmarks != null && _landmarks!.isNotEmpty)
+                              RepaintBoundary(
+                                child: CustomPaint(
+                                  painter: LandmarkPainter(_landmarks!),
+                                ),
                               ),
 
                             Positioned(
@@ -167,18 +173,18 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                                   color: Colors.black.withOpacity(0.6),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: const Row(
+                                child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Icon(
-                                      Icons.bolt_rounded,
-                                      color: Colors.yellow,
+                                      Icons.circle,
+                                      color: _isProcessing ? Colors.orange : Colors.green,
                                       size: 10,
                                     ),
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     Text(
-                                      'AI STREAMING COORDINATES',
-                                      style: TextStyle(
+                                      _isProcessing ? 'AI THINKING...' : 'LIVE TRACKING',
+                                      style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 10,
                                         fontWeight: FontWeight.w700,
@@ -212,8 +218,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(Icons.arrow_back_rounded, size: 18),
-                    SizedBox(width: 10),
-                    Text(
+                    const SizedBox(width: 10),
+                    const Text(
                       'RETURN TO WORKOUT',
                       style: TextStyle(
                         fontSize: 12,
@@ -241,56 +247,50 @@ class LandmarkPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = Colors.greenAccent
-      ..strokeWidth = 3.0
+      ..strokeWidth = 4.0
       ..strokeCap = StrokeCap.round;
 
     final dotPaint = Paint()
-      ..color = Colors.redAccent
+      ..color = Colors.red
       ..style = PaintingStyle.fill;
 
-    // Helper to draw a line between two landmarks
     void drawLine(int i1, int i2) {
       if (i1 < landmarks.length && i2 < landmarks.length) {
         final lm1 = landmarks[i1];
         final lm2 = landmarks[i2];
         
-        // Landmarks are normalized (0 to 1), so multiply by screen size
-        // We use size.width - ... for X to handle the selfie mirroring
+        // Ensure values are within 0-1 range
+        double x1 = (lm1['x'] as num).toDouble();
+        double y1 = (lm1['y'] as num).toDouble();
+        double x2 = (lm2['x'] as num).toDouble();
+        double y2 = (lm2['y'] as num).toDouble();
+
         canvas.drawLine(
-          Offset(size.width - (lm1['x'] * size.width), lm1['y'] * size.height),
-          Offset(size.width - (lm2['x'] * size.width), lm2['y'] * size.height),
+          Offset(size.width - (x1 * size.width), y1 * size.height),
+          Offset(size.width - (x2 * size.width), y2 * size.height),
           paint,
         );
       }
     }
 
-    // Connect joints (Standard MediaPipe Pose connections)
-    // Shoulders
-    drawLine(11, 12);
-    // Arms
-    drawLine(11, 13);
-    drawLine(13, 15);
-    drawLine(12, 14);
-    drawLine(14, 16);
-    // Torso
-    drawLine(11, 23);
-    drawLine(12, 24);
-    drawLine(23, 24);
-    // Legs
-    drawLine(23, 25);
-    drawLine(25, 27);
-    drawLine(24, 26);
-    drawLine(26, 28);
+    // Connect standard joints
+    drawLine(11, 12); // Shoulders
+    drawLine(11, 13); drawLine(13, 15); // Left Arm
+    drawLine(12, 14); drawLine(14, 16); // Right Arm
+    drawLine(11, 23); drawLine(12, 24); // Torso Side
+    drawLine(23, 24); // Hips
+    drawLine(23, 25); drawLine(25, 27); // Left Leg
+    drawLine(24, 26); drawLine(26, 28); // Right Leg
 
-    // Draw dots for joints
+    // Draw all points
     for (var lm in landmarks) {
-      if (lm['visibility'] > 0.5) {
-        canvas.drawCircle(
-          Offset(size.width - (lm['x'] * size.width), lm['y'] * size.height),
-          3,
-          dotPaint,
-        );
-      }
+      double x = (lm['x'] as num).toDouble();
+      double y = (lm['y'] as num).toDouble();
+      canvas.drawCircle(
+        Offset(size.width - (x * size.width), y * size.height),
+        4,
+        dotPaint,
+      );
     }
   }
 

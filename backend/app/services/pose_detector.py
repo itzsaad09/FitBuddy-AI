@@ -2,77 +2,66 @@ import cv2
 import base64
 import numpy as np
 
+# Global model variable
 _pose_model = None
 
 def get_pose_model():
     global _pose_model
     if _pose_model is None:
         try:
+            # Import inside here to prevent startup crashes
             from mediapipe.solutions import pose as mp_pose
+            
+            # model_complexity=0 is the LIGHTEST possible model for weak servers
             _pose_model = mp_pose.Pose(
                 static_image_mode=True, 
-                model_complexity=1,
-                min_detection_confidence=0.1,
-                min_tracking_confidence=0.1
+                model_complexity=0,
+                min_detection_confidence=0.3,
+                min_tracking_confidence=0.3
             )
-            print("MediaPipe Pose initialized.")
+            print("AI MODEL LOADED: Complexity 0 (Lightweight)")
         except Exception as e:
-            print(f"ERROR INITIALIZING MEDIAPIPE: {e}")
+            print(f"FATAL: Could not load MediaPipe: {e}")
     return _pose_model
 
 def process_pose_image(image):
     try:
+        # Import utilities at top level of function
         from mediapipe.solutions import pose as mp_pose
         from mediapipe.solutions import drawing_utils as mp_drawing
         
         pose = get_pose_model()
-        if pose is None or image is None:
-            print("ERROR: Pose model or Image is None")
+        if pose is None:
+            print("ERROR: AI Model is None. Possible memory issue on server.")
+            return None
+            
+        if image is None:
+            print("ERROR: Received empty image")
             return None
 
-        # Try multiple rotations
-        rotations = [0, cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]
-        best_results = None
-        best_img = None
-        found_rot = 0
+        # Convert to RGB
+        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         
-        for rot in rotations:
-            temp_img = image if rot == 0 else cv2.rotate(image, rot)
-            rgb = cv2.cvtColor(temp_img, cv2.COLOR_BGR2RGB)
-            results = pose.process(rgb)
-            if results.pose_landmarks:
-                best_results = results
-                best_img = temp_img
-                found_rot = rot
-                break
+        # Run AI detection
+        results = pose.process(rgb)
 
-        # Draw results
-        if best_results and best_img is not None:
+        # Draw even if no pose found (the debug text)
+        if results.pose_landmarks:
             mp_drawing.draw_landmarks(
-                best_img, 
-                best_results.pose_landmarks, 
+                image, 
+                results.pose_landmarks, 
                 mp_pose.POSE_CONNECTIONS,
-                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=6, circle_radius=4),
-                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=6, circle_radius=2)
+                mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=5, circle_radius=3),
+                mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=5, circle_radius=1)
             )
-            # Rotate back
-            if found_rot == cv2.ROTATE_90_CLOCKWISE:
-                image = cv2.rotate(best_img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-            elif found_rot == cv2.ROTATE_90_COUNTERCLOCKWISE:
-                image = cv2.rotate(best_img, cv2.ROTATE_90_CLOCKWISE)
-            elif found_rot == cv2.ROTATE_180:
-                image = cv2.rotate(best_img, cv2.ROTATE_180)
-            else:
-                image = best_img
             cv2.putText(image, "POSE DETECTED", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         else:
             cv2.putText(image, "NO POSE FOUND", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        # Encode to base64
-        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-        print("DEBUG: Successfully encoded image and sending to frontend.")
+        # Encode back to base64
+        _, buffer = cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
         return base64.b64encode(buffer).decode('utf-8')
         
     except Exception as e:
-        print(f"PROCESSING CRASH: {e}")
+        print(f"PROCESS_POSE_IMAGE CRASHED: {e}")
         return None

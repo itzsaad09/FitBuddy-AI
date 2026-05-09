@@ -24,12 +24,20 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUrl();
+    _initializeCamera();
+  }
+
+  void _loadUrl() {
     String url = dotenv.env['BACKEND'] ?? dotenv.env['BACKEND_URL'] ?? '';
-    if (url.isNotEmpty && !url.endsWith('/detect')) {
-      url = url.endsWith('/') ? '${url}detect' : '$url/detect';
+    if (url.isNotEmpty) {
+      if (!url.startsWith('http')) url = 'https://$url';
+      if (!url.endsWith('/detect')) {
+        url = url.endsWith('/') ? '${url}detect' : '$url/detect';
+      }
     }
     _backendUrl = url;
-    _initializeCamera();
+    print('DEBUG: Target Backend URL is: "$_backendUrl"');
   }
 
   Future<void> _initializeCamera() async {
@@ -43,7 +51,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
 
         _controller = CameraController(
           selectedCamera,
-          ResolutionPreset.low, // 'low' is much faster and reduces lag significantly
+          ResolutionPreset.medium, // Changed to medium for better AI detection
           enableAudio: false,
         );
 
@@ -52,19 +60,25 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
           setState(() {
             _isCameraInitialized = true;
           });
+          print('DEBUG: Camera initialized. Starting loop...');
           _processFrameLoop();
         }
       }
     } catch (e) {
-      debugPrint('Error initializing camera: $e');
+      print('DEBUG: Camera error: $e');
     }
   }
 
   Future<void> _processFrameLoop() async {
-    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
+    if (!mounted || _controller == null || !_controller!.value.isInitialized) {
+      print('DEBUG: Loop aborted - controller not ready');
+      return;
+    }
     if (_isProcessing) return;
+    
     if (_backendUrl.isEmpty) {
-      Future.delayed(const Duration(seconds: 1), _processFrameLoop);
+      print('DEBUG: Error - Backend URL is empty! Check your .env file.');
+      Future.delayed(const Duration(seconds: 2), _processFrameLoop);
       return;
     }
 
@@ -73,37 +87,46 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
     });
 
     try {
+      print('DEBUG: 1. Capturing picture...');
       final XFile image = await _controller!.takePicture();
-      final url = Uri.parse(_backendUrl);
+      print('DEBUG: 2. Picture saved at ${image.path}. Sending to backend...');
 
+      final url = Uri.parse(_backendUrl);
       final request = http.MultipartRequest('POST', url);
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
-      final response = await request.send().timeout(const Duration(seconds: 5));
+      print('DEBUG: 3. Request sent. Waiting for Python response...');
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 10));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('DEBUG: 4. Received Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
-        final respBody = await response.stream.bytesToString();
-        final decoded = json.decode(respBody);
+        final decoded = json.decode(response.body);
         final landmarks = decoded['landmarks'];
         
-        if (landmarks != null && mounted) {
-          debugPrint('Received ${landmarks.length} landmarks from Python');
-          setState(() {
-            _landmarks = landmarks;
-          });
+        if (landmarks != null) {
+          print('DEBUG: SUCCESS! Received ${landmarks.length} landmarks.');
+          if (mounted) {
+            setState(() {
+              _landmarks = landmarks;
+            });
+          }
+        } else {
+          print('DEBUG: Error - Backend returned 200 but no "landmarks" key found.');
         }
       } else {
-        debugPrint('Backend error: ${response.statusCode}');
+        print('DEBUG: Backend error: ${response.body}');
       }
     } catch (e) {
-      debugPrint('Python Backend network error: $e');
+      print('DEBUG: Network/Request failed: $e');
     } finally {
       if (mounted) {
         setState(() {
           _isProcessing = false;
         });
-        // Faster loop for smoother tracking
-        Future.delayed(const Duration(milliseconds: 10), _processFrameLoop);
+        // Wait a bit before next attempt to prevent overwhelming the server
+        Future.delayed(const Duration(milliseconds: 100), _processFrameLoop);
       }
     }
   }
@@ -120,11 +143,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
       appBar: AppBar(
         title: const Text(
           'AI LIVE TRACKING',
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 2,
-          ),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 2),
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -152,23 +171,15 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                           fit: StackFit.expand,
                           children: [
                             CameraPreview(_controller!),
-                            
-                            // Improved Landmark Overlay
                             if (_landmarks != null && _landmarks!.isNotEmpty)
-                              RepaintBoundary(
-                                child: CustomPaint(
-                                  painter: LandmarkPainter(_landmarks!),
-                                ),
+                              CustomPaint(
+                                painter: LandmarkPainter(_landmarks!),
                               ),
-
                             Positioned(
                               top: 16,
                               right: 16,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
                                   color: Colors.black.withOpacity(0.6),
                                   borderRadius: BorderRadius.circular(20),
@@ -176,20 +187,11 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      Icons.circle,
-                                      color: _isProcessing ? Colors.orange : Colors.green,
-                                      size: 10,
-                                    ),
+                                    Icon(Icons.circle, color: _isProcessing ? Colors.orange : Colors.green, size: 10),
                                     const SizedBox(width: 8),
                                     Text(
                                       _isProcessing ? 'AI THINKING...' : 'LIVE TRACKING',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: 1,
-                                      ),
+                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700),
                                     ),
                                   ],
                                 ),
@@ -202,33 +204,14 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                },
+                onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).colorScheme.primary,
                   foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
                   padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.arrow_back_rounded, size: 18),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'RETURN TO WORKOUT',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
-                ),
+                child: const Text('RETURN TO WORKOUT'),
               ),
             ],
           ),
@@ -240,57 +223,30 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> {
 
 class LandmarkPainter extends CustomPainter {
   final List<dynamic> landmarks;
-
   LandmarkPainter(this.landmarks);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.greenAccent
-      ..strokeWidth = 4.0
-      ..strokeCap = StrokeCap.round;
-
-    final dotPaint = Paint()
-      ..color = Colors.red
-      ..style = PaintingStyle.fill;
+    final paint = Paint()..color = Colors.greenAccent..strokeWidth = 4.0..strokeCap = StrokeCap.round;
+    final dotPaint = Paint()..color = Colors.red..style = PaintingStyle.fill;
 
     void drawLine(int i1, int i2) {
       if (i1 < landmarks.length && i2 < landmarks.length) {
-        final lm1 = landmarks[i1];
-        final lm2 = landmarks[i2];
-        
-        // Ensure values are within 0-1 range
-        double x1 = (lm1['x'] as num).toDouble();
-        double y1 = (lm1['y'] as num).toDouble();
-        double x2 = (lm2['x'] as num).toDouble();
-        double y2 = (lm2['y'] as num).toDouble();
-
+        final lm1 = landmarks[i1]; final lm2 = landmarks[i2];
         canvas.drawLine(
-          Offset(size.width - (x1 * size.width), y1 * size.height),
-          Offset(size.width - (x2 * size.width), y2 * size.height),
+          Offset(size.width - (lm1['x'] * size.width), lm1['y'] * size.height),
+          Offset(size.width - (lm2['x'] * size.width), lm2['y'] * size.height),
           paint,
         );
       }
     }
 
-    // Connect standard joints
-    drawLine(11, 12); // Shoulders
-    drawLine(11, 13); drawLine(13, 15); // Left Arm
-    drawLine(12, 14); drawLine(14, 16); // Right Arm
-    drawLine(11, 23); drawLine(12, 24); // Torso Side
-    drawLine(23, 24); // Hips
-    drawLine(23, 25); drawLine(25, 27); // Left Leg
-    drawLine(24, 26); drawLine(26, 28); // Right Leg
+    drawLine(11, 12); drawLine(11, 13); drawLine(13, 15); drawLine(12, 14); drawLine(14, 16);
+    drawLine(11, 23); drawLine(12, 24); drawLine(23, 24); drawLine(23, 25); drawLine(25, 27);
+    drawLine(24, 26); drawLine(26, 28);
 
-    // Draw all points
     for (var lm in landmarks) {
-      double x = (lm['x'] as num).toDouble();
-      double y = (lm['y'] as num).toDouble();
-      canvas.drawCircle(
-        Offset(size.width - (x * size.width), y * size.height),
-        4,
-        dotPaint,
-      );
+      canvas.drawCircle(Offset(size.width - (lm['x'] * size.width), lm['y'] * size.height), 4, dotPaint);
     }
   }
 

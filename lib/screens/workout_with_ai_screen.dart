@@ -6,6 +6,8 @@ import 'package:camera/camera.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/status.dart' as status;
 
 class WorkoutWithAiScreen extends StatefulWidget {
   const WorkoutWithAiScreen({super.key});
@@ -23,6 +25,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
   List<dynamic> _targetLandmarks = [];
   List<Map<String, dynamic>> _currentLandmarks = []; 
   late Ticker _ticker;
+  WebSocketChannel? _channel;
+  bool _isConnected = false;
   
   String _localUrl = '';
   String _remoteUrl = '';
@@ -43,9 +47,12 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
 
     String format(String u) {
       if (u.isEmpty) return '';
-      if (!u.startsWith('http')) u = 'https://$u';
-      if (!u.endsWith('/detect')) {
-        u = u.endsWith('/') ? '${u}detect' : '$u/detect';
+      if (u.startsWith('http://')) u = u.replaceFirst('http://', 'ws://');
+      if (u.startsWith('https://')) u = u.replaceFirst('https://', 'wss://');
+      if (!u.startsWith('ws')) u = 'ws://$u';
+      if (!u.endsWith('/ws/detect')) {
+        if (u.endsWith('/')) u = u.substring(0, u.length - 1);
+        u = '$u/ws/detect';
       }
       return u;
     }
@@ -93,7 +100,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
         await _controller!.initialize();
         if (mounted) {
           setState(() => _isCameraInitialized = true);
-          _startProcessingLoop();
+          _connectWebSocket();
+          _sendFrame();
         }
       }
     } catch (e) {
@@ -101,50 +109,64 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
     }
   }
 
-  Future<void> _startProcessingLoop() async {
-    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
-    if (_isProcessing) return;
+  void _connectWebSocket() {
     if (_currentActiveUrl.isEmpty) return;
+    try {
+      _channel = WebSocketChannel.connect(Uri.parse(_currentActiveUrl));
+      _isConnected = true;
+      
+      _channel!.stream.listen((message) {
+        final decoded = json.decode(message);
+        if (decoded['landmarks'] != null) {
+          if (mounted) {
+            _targetLandmarks = decoded['landmarks'];
+            // Send next frame instantly for true 0-latency
+            _sendFrame(); 
+          }
+        } else if (decoded['error'] != null) {
+          _sendFrame(); // continue stream despite corrupt frame
+        }
+      }, onDone: () {
+        _isConnected = false;
+        _fallbackToRemote();
+      }, onError: (error) {
+        _isConnected = false;
+        _fallbackToRemote();
+      });
+    } catch (e) {
+      _fallbackToRemote();
+    }
+  }
 
-    setState(() => _isProcessing = true);
-
+  Future<void> _sendFrame() async {
+    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
+    if (!_isConnected || _channel == null) return;
+    
     try {
       final XFile image = await _controller!.takePicture();
-      final request = http.MultipartRequest('POST', Uri.parse(_currentActiveUrl));
-      request.files.add(await http.MultipartFile.fromPath('image', image.path));
-
-      final streamedResponse = await request.send().timeout(const Duration(seconds: 3));
-      final response = await http.Response.fromStream(streamedResponse);
-      
-      if (response.statusCode == 200) {
-        final decoded = json.decode(response.body);
-        final landmarks = decoded['landmarks'];
-        if (mounted && landmarks != null) {
-          _targetLandmarks = landmarks;
-        }
-      } else if (_currentActiveUrl == _localUrl && _remoteUrl.isNotEmpty) {
-        _fallbackToRemote();
-      }
+      final bytes = await image.readAsBytes();
+      _channel!.sink.add(bytes);
     } catch (e) {
-      if (_currentActiveUrl == _localUrl && _remoteUrl.isNotEmpty) {
-        _fallbackToRemote();
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        _startProcessingLoop();
-      }
+      debugPrint('Camera Loop Error: $e');
+      Future.delayed(const Duration(milliseconds: 100), _sendFrame);
     }
   }
 
   void _fallbackToRemote() {
-    setState(() { _currentActiveUrl = _remoteUrl; });
+    if (_currentActiveUrl == _localUrl && _remoteUrl.isNotEmpty) {
+      setState(() { _currentActiveUrl = _remoteUrl; });
+      Future.delayed(const Duration(seconds: 1), () {
+        _connectWebSocket();
+        _sendFrame();
+      });
+    }
   }
 
   @override
   void dispose() {
     WakelockPlus.disable();
     _ticker.dispose();
+    _channel?.sink.close(status.goingAway);
     _controller?.dispose();
     super.dispose();
   }

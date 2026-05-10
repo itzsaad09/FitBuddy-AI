@@ -1,11 +1,24 @@
-import os
-from app import create_app
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.routes import router
 
-app = create_app()
+app = FastAPI(title="FitBuddy AI - Measurement Engine")
 
-if __name__ == '__main__':
-    # Render injects PORT; fall back to 5000 for local dev
-    port = int(os.environ.get('PORT', 5000))
-    # debug=False in production; use FLASK_DEBUG env var locally if needed
-    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
-    app.run(host='0.0.0.0', port=port, debug=debug)
+# CORS for any future HTTP endpoints
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include our WebSocket routes
+app.include_router(router)
+
+if __name__ == "__main__":
+    import uvicorn
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    # Run with uvicorn for high performance async processing
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

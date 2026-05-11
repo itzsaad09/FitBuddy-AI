@@ -16,18 +16,19 @@ class WorkoutWithAiScreen extends StatefulWidget {
   State<WorkoutWithAiScreen> createState() => _WorkoutWithAiScreenState();
 }
 
-class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTickerProviderStateMixin {
+class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
+    with SingleTickerProviderStateMixin {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
   bool _isProcessing = false;
 
   List<dynamic> _targetLandmarks = [];
-  List<Map<String, dynamic>> _currentLandmarks = []; 
+  List<Map<String, dynamic>> _currentLandmarks = [];
   late Ticker _ticker;
   WebSocketChannel? _channel;
   bool _isConnected = false;
-  
+
   String _localUrl = '';
   String _remoteUrl = '';
   String _currentActiveUrl = '';
@@ -65,14 +66,23 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
   void _initializeSmoothing() {
     _ticker = createTicker((elapsed) {
       if (_targetLandmarks.isEmpty) return;
-      if (_currentLandmarks.isEmpty || _currentLandmarks.length != _targetLandmarks.length) {
-        _currentLandmarks = _targetLandmarks.map((m) => Map<String, dynamic>.from(m)).toList();
+      if (_currentLandmarks.isEmpty ||
+          _currentLandmarks.length != _targetLandmarks.length) {
+        _currentLandmarks = _targetLandmarks
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
       } else {
         for (int i = 0; i < _targetLandmarks.length; i++) {
           final target = _targetLandmarks[i];
           final current = _currentLandmarks[i];
-          current['x'] += ((target['x'] as num).toDouble() - (current['x'] as num).toDouble()) * 0.25;
-          current['y'] += ((target['y'] as num).toDouble() - (current['y'] as num).toDouble()) * 0.25;
+          current['x'] +=
+              ((target['x'] as num).toDouble() -
+                  (current['x'] as num).toDouble()) *
+              0.25;
+          current['y'] +=
+              ((target['y'] as num).toDouble() -
+                  (current['y'] as num).toDouble()) *
+              0.25;
           current['v'] = (target['v'] as num).toDouble();
         }
       }
@@ -112,13 +122,13 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
   void _connectWebSocket() {
     if (_currentActiveUrl.isEmpty) return;
     print('DEBUG: Connecting to AI: $_currentActiveUrl');
-    
+
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_currentActiveUrl));
-      
+
       // We set a flag to track if we've successfully received any message
       bool receivedData = false;
-      
+
       // If we are connecting to LOCAL, set a timeout to fallback if no data comes back
       if (_currentActiveUrl == _localUrl) {
         Future.delayed(const Duration(seconds: 3), () {
@@ -129,31 +139,35 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
         });
       }
 
-      _channel!.stream.listen((message) {
-        if (!receivedData) {
-          receivedData = true;
-          _isConnected = true;
-          print('DEBUG: AI Connected Successfully');
-        }
-        
-        final decoded = json.decode(message);
-        if (decoded['landmarks'] != null) {
-          if (mounted) {
-            _targetLandmarks = decoded['landmarks'];
-            _sendFrame(); 
+      _channel!.stream.listen(
+        (message) {
+          if (!receivedData) {
+            receivedData = true;
+            _isConnected = true;
+            print('DEBUG: AI Connected Successfully');
           }
-        } else if (decoded['error'] != null) {
-          _sendFrame();
-        }
-      }, onDone: () {
-        print('DEBUG: AI Connection Closed');
-        _isConnected = false;
-        _fallbackToRemote();
-      }, onError: (error) {
-        print('DEBUG: AI Connection Error: $error');
-        _isConnected = false;
-        _fallbackToRemote();
-      });
+
+          final decoded = json.decode(message);
+          if (decoded['landmarks'] != null) {
+            if (mounted) {
+              _targetLandmarks = decoded['landmarks'];
+              _sendFrame();
+            }
+          } else if (decoded['error'] != null) {
+            _sendFrame();
+          }
+        },
+        onDone: () {
+          print('DEBUG: AI Connection Closed');
+          _isConnected = false;
+          _fallbackToRemote();
+        },
+        onError: (error) {
+          print('DEBUG: AI Connection Error: $error');
+          _isConnected = false;
+          _fallbackToRemote();
+        },
+      );
     } catch (e) {
       print('DEBUG: Connection Exception: $e');
       _fallbackToRemote();
@@ -161,8 +175,9 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
   }
 
   Future<void> _sendFrame() async {
-    if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
-    
+    if (!mounted || _controller == null || !_controller!.value.isInitialized)
+      return;
+
     // Check if we have a channel, even if 'isConnected' isn't true yet
     // This allows the first frame to 'wake up' the backend
     if (_channel == null) {
@@ -171,11 +186,11 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
       }
       return;
     }
-    
+
     try {
       final XFile image = await _controller!.takePicture();
       final bytes = await image.readAsBytes();
-      
+
       // Send if channel exists (optimistic connection)
       _channel!.sink.add(bytes);
     } catch (e) {
@@ -190,13 +205,13 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
     if (_currentActiveUrl == _localUrl && _remoteUrl.isNotEmpty) {
       _isSwitching = true;
       print('DEBUG: Falling back to Remote Backend...');
-      
+
       // Close old channel
       _channel?.sink.close();
       _isConnected = false;
-      
-      setState(() { 
-        _currentActiveUrl = _remoteUrl; 
+
+      setState(() {
+        _currentActiveUrl = _remoteUrl;
       });
 
       Future.delayed(const Duration(seconds: 1), () {
@@ -225,13 +240,22 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
       appBar: AppBar(
         title: const Text(
           'SMOOTH AI WORKOUT',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, letterSpacing: 2, color: Colors.white),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2,
+            color: Colors.white,
+          ),
         ),
         backgroundColor: Colors.black,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -240,12 +264,18 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
           children: [
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(32),
-                    border: Border.all(color: colorScheme.primary.withOpacity(0.3), width: 1),
+                    border: Border.all(
+                      color: colorScheme.primary.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: _isCameraInitialized && _controller != null
@@ -265,7 +295,11 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
                                       child: CustomPaint(
                                         painter: PosePainter(
                                           landmarks: _currentLandmarks,
-                                          isFrontCamera: _controller!.description.lensDirection == CameraLensDirection.front,
+                                          isFrontCamera:
+                                              _controller!
+                                                  .description
+                                                  .lensDirection ==
+                                              CameraLensDirection.front,
                                         ),
                                       ),
                                     ),
@@ -273,21 +307,33 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
                                 ),
                               ),
                             ),
-                            
+
                             // 3. UI Overlays (Badges)
                             Positioned(
                               top: 20,
                               left: 20,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.black54,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: Colors.white24, width: 0.5),
+                                  border: Border.all(
+                                    color: Colors.white24,
+                                    width: 0.5,
+                                  ),
                                 ),
                                 child: Text(
-                                  _currentActiveUrl == _localUrl ? 'LOCAL: LOW LATENCY' : 'REMOTE: CLOUD AI',
-                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                  _currentActiveUrl == _localUrl
+                                      ? 'LOCAL: LOW LATENCY'
+                                      : 'REMOTE: CLOUD AI',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
@@ -297,7 +343,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
                 ),
               ),
             ),
-            
+
             Padding(
               padding: const EdgeInsets.all(24.0),
               child: SizedBox(
@@ -308,10 +354,15 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
                     backgroundColor: colorScheme.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 20),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
                     elevation: 8,
                   ),
-                  child: const Text('FINISH WORKOUT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: const Text(
+                    'FINISH WORKOUT',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
                 ),
               ),
             ),
@@ -332,8 +383,14 @@ class PosePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (landmarks.isEmpty) return;
 
-    final paintJoint = Paint()..color = Colors.cyanAccent.withOpacity(0.9)..strokeWidth = 6..strokeCap = StrokeCap.round;
-    final paintLine = Paint()..color = Colors.greenAccent.withOpacity(0.7)..strokeWidth = 4..strokeCap = StrokeCap.round;
+    final paintJoint = Paint()
+      ..color = Colors.cyanAccent.withOpacity(0.9)
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round;
+    final paintLine = Paint()
+      ..color = Colors.greenAccent.withOpacity(0.7)
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
 
     Offset? getPos(int index) {
       if (index >= landmarks.length) return null;
@@ -342,7 +399,7 @@ class PosePainter extends CustomPainter {
 
       double x = (lm['x'] as num).toDouble();
       double y = (lm['y'] as num).toDouble();
-      
+
       // Mirroring for front camera
       if (isFrontCamera) x = 1.0 - x;
 
@@ -350,8 +407,18 @@ class PosePainter extends CustomPainter {
     }
 
     final connections = [
-      [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
-      [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
+      [11, 12],
+      [11, 13],
+      [13, 15],
+      [12, 14],
+      [14, 16],
+      [11, 23],
+      [12, 24],
+      [23, 24],
+      [23, 25],
+      [25, 27],
+      [24, 26],
+      [26, 28],
     ];
 
     for (final conn in connections) {
@@ -360,7 +427,11 @@ class PosePainter extends CustomPainter {
       if (p1 != null && p2 != null) canvas.drawLine(p1, p2, paintLine);
     }
 
-    for (int i = 0; i < landmarks.length; i++) {
+    // Only draw dots for major joints (Shoulders down to Ankles)
+    // We skip indices 0-10 (Face) and 17-22 (Fingers/Hands)
+    const jointIndices = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+
+    for (int i in jointIndices) {
       final pos = getPos(i);
       if (pos != null) canvas.drawCircle(pos, 4, paintJoint);
     }

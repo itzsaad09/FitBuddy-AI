@@ -111,40 +111,72 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
 
   void _connectWebSocket() {
     if (_currentActiveUrl.isEmpty) return;
+    print('DEBUG: Connecting to AI: $_currentActiveUrl');
+    
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_currentActiveUrl));
-      _isConnected = true;
       
+      // We set a flag to track if we've successfully received any message
+      bool receivedData = false;
+      
+      // If we are connecting to LOCAL, set a timeout to fallback if no data comes back
+      if (_currentActiveUrl == _localUrl) {
+        Future.delayed(const Duration(seconds: 3), () {
+          if (mounted && !receivedData && _currentActiveUrl == _localUrl) {
+            print('DEBUG: Local timeout. Switching to Remote.');
+            _fallbackToRemote();
+          }
+        });
+      }
+
       _channel!.stream.listen((message) {
+        if (!receivedData) {
+          receivedData = true;
+          _isConnected = true;
+          print('DEBUG: AI Connected Successfully');
+        }
+        
         final decoded = json.decode(message);
         if (decoded['landmarks'] != null) {
           if (mounted) {
             _targetLandmarks = decoded['landmarks'];
-            // Send next frame instantly for true 0-latency
             _sendFrame(); 
           }
         } else if (decoded['error'] != null) {
-          _sendFrame(); // continue stream despite corrupt frame
+          _sendFrame();
         }
       }, onDone: () {
+        print('DEBUG: AI Connection Closed');
         _isConnected = false;
         _fallbackToRemote();
       }, onError: (error) {
+        print('DEBUG: AI Connection Error: $error');
         _isConnected = false;
         _fallbackToRemote();
       });
     } catch (e) {
+      print('DEBUG: Connection Exception: $e');
       _fallbackToRemote();
     }
   }
 
   Future<void> _sendFrame() async {
     if (!mounted || _controller == null || !_controller!.value.isInitialized) return;
-    if (!_isConnected || _channel == null) return;
+    
+    // Check if we have a channel, even if 'isConnected' isn't true yet
+    // This allows the first frame to 'wake up' the backend
+    if (_channel == null) {
+      if (_currentActiveUrl.isNotEmpty) {
+        Future.delayed(const Duration(milliseconds: 500), _sendFrame);
+      }
+      return;
+    }
     
     try {
       final XFile image = await _controller!.takePicture();
       final bytes = await image.readAsBytes();
+      
+      // Send if channel exists (optimistic connection)
       _channel!.sink.add(bytes);
     } catch (e) {
       debugPrint('Camera Loop Error: $e');
@@ -152,10 +184,23 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
     }
   }
 
+  bool _isSwitching = false;
   void _fallbackToRemote() {
+    if (_isSwitching) return;
     if (_currentActiveUrl == _localUrl && _remoteUrl.isNotEmpty) {
-      setState(() { _currentActiveUrl = _remoteUrl; });
+      _isSwitching = true;
+      print('DEBUG: Falling back to Remote Backend...');
+      
+      // Close old channel
+      _channel?.sink.close();
+      _isConnected = false;
+      
+      setState(() { 
+        _currentActiveUrl = _remoteUrl; 
+      });
+
       Future.delayed(const Duration(seconds: 1), () {
+        _isSwitching = false;
         _connectWebSocket();
         _sendFrame();
       });
@@ -207,27 +252,24 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen> with SingleTi
                       ? Stack(
                           fit: StackFit.expand,
                           children: [
-                            // 1. Camera View with Correct Fill
+                            // Single FittedBox for perfect synchronization
                             FittedBox(
                               fit: BoxFit.cover,
                               child: SizedBox(
                                 width: _controller!.value.previewSize!.height,
                                 height: _controller!.value.previewSize!.width,
-                                child: CameraPreview(_controller!),
-                              ),
-                            ),
-
-                            // 2. AI Overlay aligned to the FittedBox
-                            FittedBox(
-                              fit: BoxFit.cover,
-                              child: SizedBox(
-                                width: _controller!.value.previewSize!.height,
-                                height: _controller!.value.previewSize!.width,
-                                child: CustomPaint(
-                                  painter: PosePainter(
-                                    landmarks: _currentLandmarks,
-                                    isFrontCamera: _controller!.description.lensDirection == CameraLensDirection.front,
-                                  ),
+                                child: Stack(
+                                  children: [
+                                    CameraPreview(_controller!),
+                                    Positioned.fill(
+                                      child: CustomPaint(
+                                        painter: PosePainter(
+                                          landmarks: _currentLandmarks,
+                                          isFrontCamera: _controller!.description.lensDirection == CameraLensDirection.front,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

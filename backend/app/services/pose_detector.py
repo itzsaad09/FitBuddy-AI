@@ -18,7 +18,7 @@ def get_pose_model():
             # static_image_mode=True: Treats each request as a standalone image.
             # This is the ONLY stable way to run on Render/REST APIs.
             _pose_model = mp_pose.Pose(
-                static_image_mode=True, 
+                static_image_mode=False, 
                 model_complexity=0,
                 min_detection_confidence=0.3,
                 min_tracking_confidence=0.3

@@ -28,6 +28,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
   late Ticker _ticker;
   WebSocketChannel? _channel;
   bool _isConnected = false;
+  String _currentFormStatus = 'WAITING...';
 
   String _localUrl = '';
   String _remoteUrl = '';
@@ -150,7 +151,10 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
           final decoded = json.decode(message);
           if (decoded['landmarks'] != null) {
             if (mounted) {
-              _targetLandmarks = decoded['landmarks'];
+              setState(() {
+                _targetLandmarks = decoded['landmarks'];
+                _currentFormStatus = (decoded['classification'] ?? '...').toString().toUpperCase();
+              });
               _sendFrame();
             }
           } else if (decoded['error'] != null) {
@@ -333,6 +337,47 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                                     color: Colors.white,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // 4. Form Correction Status Badge
+                            Positioned(
+                              bottom: 30,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: _currentFormStatus.contains('GOOD') ||
+                                            _currentFormStatus.contains('PERFECT')
+                                        ? Colors.green.withOpacity(0.8)
+                                        : _currentFormStatus == '...' ||
+                                                _currentFormStatus == 'WAITING...'
+                                            ? Colors.black54
+                                            : Colors.red.withOpacity(0.8),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: Colors.black26,
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      )
+                                    ],
+                                  ),
+                                  child: Text(
+                                    _currentFormStatus,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.5,
+                                    ),
                                   ),
                                 ),
                               ),

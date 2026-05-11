@@ -2,6 +2,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import cv2
 import numpy as np
 from app.services.pose_detector import process_pose_image
+from app.services.pose_utils import normalize_pose
+from app.services.pose_classifier import classifier
 
 router = APIRouter()
 
@@ -13,26 +15,27 @@ async def health_check():
 async def pose_detection_socket(websocket: WebSocket):
     """
     Zero-latency WebSocket endpoint.
-    Receives raw JPG bytes from Flutter, decodes, runs MediaPipe, and streams back JSON.
     """
     await websocket.accept()
-    print("AI: ⚡ Client connected to WebSocket stream")
+    print("AI: ⚡ Client connected")
     
     try:
         while True:
-            # 1. Wait for binary image data from Flutter
             data = await websocket.receive_bytes()
-            
-            # 2. Decode the bytes back into a numpy array (OpenCV image)
             np_arr = np.frombuffer(data, np.uint8)
             image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
             
             if image is not None:
-                # 3. Process image to get 33 landmarks
                 landmarks = process_pose_image(image)
+                classification = "No Data"
+                if landmarks:
+                    normalized = normalize_pose(landmarks)
+                    classification = classifier.predict(normalized)
                 
-                # 4. Stream coordinates back instantly
-                await websocket.send_json({"landmarks": landmarks})
+                await websocket.send_json({
+                    "landmarks": landmarks,
+                    "classification": classification
+                })
             else:
                 await websocket.send_json({"error": "Corrupt frame"})
                 

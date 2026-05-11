@@ -47,6 +47,7 @@ def process_pose_image(image):
                 landmarks_data.append({
                     'x': float(lm.x),
                     'y': float(lm.y),
+                    'z': float(lm.z),
                     'v': float(lm.visibility)
                 })
         

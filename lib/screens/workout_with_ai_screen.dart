@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:camera/camera.dart';
-import 'package:http/http.dart' as http;
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -29,13 +29,13 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
   CameraController? _controller;
   List<CameraDescription>? _cameras;
   bool _isCameraInitialized = false;
-  bool _isProcessing = false;
+
 
   List<dynamic> _targetLandmarks = [];
   List<Map<String, dynamic>> _currentLandmarks = [];
   late Ticker _ticker;
   WebSocketChannel? _channel;
-  bool _isConnected = false;
+
   String _currentFormStatus = 'WAITING...';
 
   String _localUrl = '';
@@ -133,11 +133,14 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
 
   void _connectWebSocket() {
     if (_currentActiveUrl.isEmpty) return;
-    print('DEBUG: Connecting to AI: $_currentActiveUrl. Target: ${widget.targetMuscle}');
+    print('DEBUG: Connecting to AI: $_currentActiveUrl. Target: ${widget.targetMuscle}, Exercise: ${widget.exerciseName}');
 
     try {
       final uri = Uri.parse(_currentActiveUrl).replace(
-        queryParameters: {'target': widget.targetMuscle.toLowerCase()},
+        queryParameters: {
+          'target': widget.targetMuscle.toLowerCase(),
+          'exercise': widget.exerciseName.toLowerCase(),
+        },
       );
       _channel = WebSocketChannel.connect(uri);
 
@@ -342,7 +345,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(32),
                     border: Border.all(
-                      color: colorScheme.primary.withOpacity(0.3),
+                      color: colorScheme.primary.withValues(alpha: 0.3),
                       width: 1,
                     ),
                   ),
@@ -596,18 +599,18 @@ class PosePainter extends CustomPainter {
     if (landmarks.isEmpty) return;
 
     final paintJoint = Paint()
-      ..color = Colors.cyanAccent.withOpacity(0.9)
+      ..color = Colors.cyanAccent.withValues(alpha: 0.9)
       ..strokeWidth = 6
       ..strokeCap = StrokeCap.round;
     final paintLine = Paint()
-      ..color = Colors.greenAccent.withOpacity(0.7)
+      ..color = Colors.greenAccent.withValues(alpha: 0.7)
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round;
 
     Offset? getPos(int index) {
       if (index >= landmarks.length) return null;
       final lm = landmarks[index];
-      if ((lm['v'] as num).toDouble() < 0.3) return null;
+      if ((lm['v'] as num).toDouble() < 0.5) return null;
 
       double x = (lm['x'] as num).toDouble();
       double y = (lm['y'] as num).toDouble();

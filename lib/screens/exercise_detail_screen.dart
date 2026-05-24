@@ -244,6 +244,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                 MaterialPageRoute(
                   builder: (context) => WorkoutWithAiScreen(
                     targetMuscle: _currentExercise.target,
+                    exerciseName: _currentExercise.name,
                   ),
                 ),
               );

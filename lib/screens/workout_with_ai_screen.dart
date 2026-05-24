@@ -11,7 +11,12 @@ import 'package:web_socket_channel/status.dart' as status;
 
 class WorkoutWithAiScreen extends StatefulWidget {
   final String targetMuscle;
-  const WorkoutWithAiScreen({super.key, this.targetMuscle = 'general'});
+  final String exerciseName;
+  const WorkoutWithAiScreen({
+    super.key,
+    this.targetMuscle = 'general',
+    this.exerciseName = 'Workout',
+  });
 
   @override
   State<WorkoutWithAiScreen> createState() => _WorkoutWithAiScreenState();
@@ -159,9 +164,40 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
             if (mounted) {
               setState(() {
                 _targetLandmarks = decoded['landmarks'];
-                _currentFormStatus = (decoded['classification'] ?? '...').toString().toUpperCase();
                 
+                final String rawClassification = (decoded['classification'] ?? '...').toString().toUpperCase();
                 final String rawState = (decoded['state'] ?? 'UNKNOWN').toString().toUpperCase();
+                
+                // If it's a raw KNN classification (doesn't contain angle measurements)
+                // and it doesn't match the current exercise name, sanitize it!
+                if (!rawClassification.contains('ANGLE') && 
+                    !rawClassification.contains('KNEE') && 
+                    !rawClassification.contains('SHOULDER')) {
+                  final String exNameLower = widget.exerciseName.toLowerCase();
+                  final String classLower = rawClassification.toLowerCase();
+                  
+                  // Check if the predicted class matches the current exercise
+                  bool matches = exNameLower.contains(classLower) || 
+                                 classLower.contains(exNameLower) ||
+                                 (classLower.replaceAll('_', '').contains(exNameLower.replaceAll(' ', '')));
+                                 
+                  if (!matches) {
+                    if (rawState == 'BENT') {
+                      _currentFormStatus = 'POSITION: DOWN';
+                    } else if (rawState == 'STRAIGHT') {
+                      _currentFormStatus = 'POSITION: UP';
+                    } else if (rawState == 'MOVING') {
+                      _currentFormStatus = 'IN MOTION...';
+                    } else {
+                      _currentFormStatus = 'TRACKING...';
+                    }
+                  } else {
+                    _currentFormStatus = rawClassification.replaceAll('_', ' ');
+                  }
+                } else {
+                  _currentFormStatus = rawClassification;
+                }
+                
                 if (rawState == 'STRAIGHT' || rawState == 'BENT') {
                   if (rawState == 'STRAIGHT' && _lastState == 'BENT') {
                     _repCount++;
@@ -257,14 +293,16 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text(
-          'SMOOTH AI WORKOUT',
-          style: TextStyle(
+        title: Text(
+          widget.exerciseName.toUpperCase(),
+          style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w900,
             letterSpacing: 2,
             color: Colors.white,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         backgroundColor: Colors.black,
         elevation: 0,

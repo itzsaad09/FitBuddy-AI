@@ -30,6 +30,7 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                 classification = "No Data"
                 angle = None
                 state = "UNKNOWN"
+                guidance = "READY"
                 
                 if landmarks and len(landmarks) >= 33:
                     # Normalized pose vector for fallback/legacy classification
@@ -55,10 +56,18 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                             
                         if angle < 60:
                             state = "BENT"
+                            guidance = "GOOD SQUEEZE! NOW EXTEND"
                         elif angle > 150:
                             state = "STRAIGHT"
+                            guidance = "GOOD EXTENSION! NOW CURL"
                         else:
                             state = "MOVING"
+                            if angle > 60 and angle < 100:
+                                guidance = "CURL HIGHER TO FINISH"
+                            elif angle > 110 and angle < 150:
+                                guidance = "LOWER ARMS SLOWLY"
+                            else:
+                                guidance = "KEEP ELBOWS STATIONARY"
                         classification = f"ANGLE: {int(angle)}° ({state})"
                         
                     # 2. QUADS / GLUTES / LEGS / THIGHS / WAIST
@@ -78,10 +87,18 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                             
                         if angle < 95:
                             state = "BENT"
+                            guidance = "GOOD DEPTH! RISE UP"
                         elif angle > 160:
                             state = "STRAIGHT"
+                            guidance = "STAND FULLY TO START"
                         else:
                             state = "MOVING"
+                            if angle >= 95 and angle < 130:
+                                guidance = "SQUAT DEEPER FOR FULL RANGE"
+                            elif angle >= 130 and angle < 160:
+                                guidance = "CONTROL THE LOWERING PHASE"
+                            else:
+                                guidance = "KEEP BACK STRAIGHT"
                         classification = f"KNEE: {int(angle)}° ({state})"
                         
                     # 3. SHOULDERS / CHEST / BACK / NECK
@@ -101,10 +118,18 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                             
                         if angle < 60:
                             state = "BENT"
+                            guidance = "GOOD CONTRACT! PRESS UP"
                         elif angle > 130:
                             state = "STRAIGHT"
+                            guidance = "GOOD EXTENSION! LOWER DOWN"
                         else:
                             state = "MOVING"
+                            if angle >= 60 and angle < 100:
+                                guidance = "PRESS HIGHER"
+                            elif angle >= 100 and angle < 130:
+                                guidance = "LOWER DOWN SLOWLY"
+                            else:
+                                guidance = "KEEP SHOULDERS LEVEL"
                         classification = f"SHOULDER: {int(angle)}° ({state})"
                         
                     # 4. DEFAULT: Run KNN classifier
@@ -113,16 +138,20 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                         class_lower = classification.lower()
                         if "down" in class_lower or "bent" in class_lower:
                             state = "BENT"
+                            guidance = "HOLD DOWN POSITION"
                         elif "up" in class_lower or "straight" in class_lower:
                             state = "STRAIGHT"
+                            guidance = "RETURN TO START"
                         else:
                             state = "MOVING"
+                            guidance = "IN MOTION - STABILIZE POSTURE"
                 
                 await websocket.send_json({
                     "landmarks": landmarks,
                     "classification": classification,
                     "angle": angle,
-                    "state": state
+                    "state": state,
+                    "guidance": guidance
                 })
             else:
                 await websocket.send_json({"error": "Corrupt frame"})

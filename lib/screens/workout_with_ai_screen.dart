@@ -41,6 +41,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
   String _currentActiveUrl = '';
   int _repCount = 0;
   String _lastState = 'UNKNOWN';
+  String _guidanceTip = 'READY';
 
   @override
   void initState() {
@@ -205,6 +206,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                   }
                   _lastState = rawState;
                 }
+                
+                _guidanceTip = (decoded['guidance'] ?? 'READY').toString().toUpperCase();
               });
               _sendFrame();
             }
@@ -437,6 +440,56 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                                     color: Colors.white,
                                     fontSize: 10,
                                     fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // 5. AI Guidance Coach Badge
+                            Positioned(
+                              bottom: 95,
+                              left: 20,
+                              right: 20,
+                              child: Center(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.75),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: _guidanceTip.contains('GOOD') || _guidanceTip.contains('GREAT')
+                                          ? Colors.cyanAccent.withValues(alpha: 0.5)
+                                          : Colors.amberAccent.withValues(alpha: 0.5),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.campaign_rounded,
+                                        color: _guidanceTip.contains('GOOD') || _guidanceTip.contains('GREAT')
+                                            ? Colors.cyanAccent
+                                            : Colors.amberAccent,
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Flexible(
+                                        child: Text(
+                                          _guidanceTip,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: 0.5,
+                                          ),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),

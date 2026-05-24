@@ -43,13 +43,13 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                     if any(x in target_lower or x in exercise_lower for x in ["raise", "fly", "lateral"]):
                         # Left Shoulder (Hip=23, Shoulder=11, Elbow=13)
                         left_angle = calculate_angle(landmarks[23], landmarks[11], landmarks[13])
-                        left_v = min(landmarks[23].get('v', 0), landmarks[11].get('v', 0), landmarks[13].get('v', 0))
+                        left_v = min(landmarks[11].get('v', 0), landmarks[13].get('v', 0)) # Only require Shoulder and Elbow
                         
                         # Right Shoulder (Hip=24, Shoulder=12, Elbow=14)
                         right_angle = calculate_angle(landmarks[24], landmarks[12], landmarks[14])
-                        right_v = min(landmarks[24].get('v', 0), landmarks[12].get('v', 0), landmarks[14].get('v', 0))
+                        right_v = min(landmarks[12].get('v', 0), landmarks[14].get('v', 0)) # Only require Shoulder and Elbow
                         
-                        if max(left_v, right_v) < 0.5:
+                        if max(left_v, right_v) < 0.3:
                             state = "UNKNOWN"
                             guidance = "ALIGN YOUR BODY IN FRAME"
                             classification = "WAITING..."
@@ -76,7 +76,7 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                         right_angle = calculate_angle(landmarks[12], landmarks[14], landmarks[16])
                         right_v = min(landmarks[12].get('v', 0), landmarks[14].get('v', 0), landmarks[16].get('v', 0))
                         
-                        if max(left_v, right_v) < 0.5:
+                        if max(left_v, right_v) < 0.3:
                             state = "UNKNOWN"
                             guidance = "ALIGN YOUR BODY IN FRAME"
                             classification = "WAITING..."
@@ -97,13 +97,13 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                     elif any(x in target_lower for x in ["quad", "glute", "hamstring", "calves", "adductor", "abductor", "leg", "thigh", "squat", "lung"]):
                         # Left Knee (Hip=23, Knee=25, Ankle=27)
                         left_angle = calculate_angle(landmarks[23], landmarks[25], landmarks[27])
-                        left_v = min(landmarks[23].get('v', 0), landmarks[25].get('v', 0), landmarks[27].get('v', 0))
+                        left_v = min(landmarks[23].get('v', 0), landmarks[25].get('v', 0)) # Only require Hip and Knee
                         
                         # Right Knee (Hip=24, Knee=26, Ankle=28)
                         right_angle = calculate_angle(landmarks[24], landmarks[26], landmarks[28])
-                        right_v = min(landmarks[24].get('v', 0), landmarks[26].get('v', 0), landmarks[28].get('v', 0))
+                        right_v = min(landmarks[24].get('v', 0), landmarks[26].get('v', 0)) # Only require Hip and Knee
                         
-                        if max(left_v, right_v) < 0.5:
+                        if max(left_v, right_v) < 0.3:
                             state = "UNKNOWN"
                             guidance = "ALIGN YOUR BODY IN FRAME"
                             classification = "WAITING..."
@@ -124,13 +124,13 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                     elif any(x in target_lower for x in ["abs", "core", "abdominal", "situp", "crunch"]):
                         # Left Hip (Shoulder=11, Hip=23, Knee=25)
                         left_angle = calculate_angle(landmarks[11], landmarks[23], landmarks[25])
-                        left_v = min(landmarks[11].get('v', 0), landmarks[23].get('v', 0), landmarks[25].get('v', 0))
+                        left_v = min(landmarks[11].get('v', 0), landmarks[23].get('v', 0)) # Only require Shoulder and Hip
                         
                         # Right Hip (Shoulder=12, Hip=24, Knee=26)
                         right_angle = calculate_angle(landmarks[12], landmarks[24], landmarks[26])
-                        right_v = min(landmarks[12].get('v', 0), landmarks[24].get('v', 0), landmarks[26].get('v', 0))
+                        right_v = min(landmarks[12].get('v', 0), landmarks[24].get('v', 0)) # Only require Shoulder and Hip
                         
-                        if max(left_v, right_v) < 0.5:
+                        if max(left_v, right_v) < 0.3:
                             state = "UNKNOWN"
                             guidance = "ALIGN YOUR BODY IN FRAME"
                             classification = "WAITING..."
@@ -151,13 +151,13 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                     elif any(x in target_lower or x in exercise_lower for x in ["pectoral", "lats", "back", "trap", "delts", "deltoid", "serratus", "scapulae", "spine", "shoulder", "chest", "neck", "press"]):
                         # Left Elbow (Shoulder=11, Elbow=13, Wrist=15)
                         left_angle = calculate_angle(landmarks[11], landmarks[13], landmarks[15])
-                        left_v = min(landmarks[11].get('v', 0), landmarks[13].get('v', 0), landmarks[15].get('v', 0))
+                        left_v = min(landmarks[11].get('v', 0), landmarks[13].get('v', 0)) # Only require Shoulder and Elbow
                         
                         # Right Elbow (Shoulder=12, Elbow=14, Wrist=16)
                         right_angle = calculate_angle(landmarks[12], landmarks[14], landmarks[16])
-                        right_v = min(landmarks[12].get('v', 0), landmarks[14].get('v', 0), landmarks[16].get('v', 0))
+                        right_v = min(landmarks[12].get('v', 0), landmarks[14].get('v', 0)) # Only require Shoulder and Elbow
                         
-                        if max(left_v, right_v) < 0.5:
+                        if max(left_v, right_v) < 0.3:
                             state = "UNKNOWN"
                             guidance = "ALIGN YOUR BODY IN FRAME"
                             classification = "WAITING..."
@@ -189,10 +189,10 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                         
                         # Monitor relevant joint only
                         if "squat" in class_lower or "jack" in class_lower:
-                            left_v = min(landmarks[23].get('v', 0), landmarks[25].get('v', 0), landmarks[27].get('v', 0))
-                            right_v = min(landmarks[24].get('v', 0), landmarks[26].get('v', 0), landmarks[28].get('v', 0))
+                            left_v = min(landmarks[23].get('v', 0), landmarks[25].get('v', 0))
+                            right_v = min(landmarks[24].get('v', 0), landmarks[26].get('v', 0))
                             
-                            if max(left_v, right_v) < 0.5:
+                            if max(left_v, right_v) < 0.3:
                                 state = "UNKNOWN"
                                 guidance = "ALIGN YOUR BODY IN FRAME"
                                 classification = "WAITING..."
@@ -209,10 +209,10 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                                     guidance = "KEEP CONTROL - KEEP BALANCED"
                                 
                         elif "situp" in class_lower or "crunch" in class_lower:
-                            left_v = min(landmarks[11].get('v', 0), landmarks[23].get('v', 0), landmarks[25].get('v', 0))
-                            right_v = min(landmarks[12].get('v', 0), landmarks[24].get('v', 0), landmarks[26].get('v', 0))
+                            left_v = min(landmarks[11].get('v', 0), landmarks[23].get('v', 0))
+                            right_v = min(landmarks[12].get('v', 0), landmarks[24].get('v', 0))
                             
-                            if max(left_v, right_v) < 0.5:
+                            if max(left_v, right_v) < 0.3:
                                 state = "UNKNOWN"
                                 guidance = "ALIGN YOUR BODY IN FRAME"
                                 classification = "WAITING..."
@@ -229,10 +229,10 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general", e
                                     guidance = "ENGAGE YOUR CORE"
                                 
                         else:  # push_up, pull_up, or general upper body
-                            left_v = min(landmarks[11].get('v', 0), landmarks[13].get('v', 0), landmarks[15].get('v', 0))
-                            right_v = min(landmarks[12].get('v', 0), landmarks[14].get('v', 0), landmarks[16].get('v', 0))
+                            left_v = min(landmarks[11].get('v', 0), landmarks[13].get('v', 0))
+                            right_v = min(landmarks[12].get('v', 0), landmarks[14].get('v', 0))
                             
-                            if max(left_v, right_v) < 0.5:
+                            if max(left_v, right_v) < 0.3:
                                 state = "UNKNOWN"
                                 guidance = "ALIGN YOUR BODY IN FRAME"
                                 classification = "WAITING..."

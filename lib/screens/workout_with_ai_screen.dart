@@ -35,6 +35,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
   List<Map<String, dynamic>> _currentLandmarks = [];
   late Ticker _ticker;
   WebSocketChannel? _channel;
+  bool _isConnected = false;
 
   String _currentFormStatus = 'WAITING...';
 
@@ -445,9 +446,11 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                                   ),
                                 ),
                                 child: Text(
-                                  _currentActiveUrl == _localUrl
-                                      ? 'LOCAL: LOW LATENCY'
-                                      : 'REMOTE: CLOUD AI',
+                                  !_isConnected
+                                      ? 'CONNECTING TO AI...'
+                                      : (_currentActiveUrl == _localUrl
+                                          ? 'LOCAL: LOW LATENCY'
+                                          : 'REMOTE: CLOUD AI'),
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 10,

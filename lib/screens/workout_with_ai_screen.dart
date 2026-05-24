@@ -8,6 +8,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
+import 'package:image/image.dart' as img;
+import 'dart:typed_data';
 
 class WorkoutWithAiScreen extends StatefulWidget {
   final String targetMuscle;
@@ -247,7 +249,14 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
 
     try {
       final XFile image = await _controller!.takePicture();
-      final bytes = await image.readAsBytes();
+      Uint8List bytes = await image.readAsBytes();
+
+      // Compress and downscale in memory (180px width is perfect for MediaPipe, reducing payload size by 98%)
+      final img.Image? decoded = img.decodeImage(bytes);
+      if (decoded != null) {
+        final img.Image resized = img.copyResize(decoded, width: 180);
+        bytes = Uint8List.fromList(img.encodeJpg(resized, quality: 50));
+      }
 
       // Send if channel exists (optimistic connection)
       _channel!.sink.add(bytes);
@@ -507,13 +516,18 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                                     vertical: 12,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: _currentFormStatus.contains('GOOD') ||
+                                    color: _currentFormStatus.contains('BENT') ||
+                                            _currentFormStatus.contains('STRAIGHT') ||
+                                            _currentFormStatus.contains('UP') ||
+                                            _currentFormStatus.contains('DOWN') ||
+                                            _currentFormStatus.contains('GOOD') ||
                                             _currentFormStatus.contains('PERFECT')
-                                        ? Colors.green.withOpacity(0.8)
-                                        : _currentFormStatus == '...' ||
+                                        ? Colors.green.withValues(alpha: 0.8)
+                                        : _currentFormStatus.contains('MOTION') ||
+                                                _currentFormStatus == '...' ||
                                                 _currentFormStatus == 'WAITING...'
                                             ? Colors.black54
-                                            : Colors.red.withOpacity(0.8),
+                                            : Colors.red.withValues(alpha: 0.8),
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: const [
                                       BoxShadow(

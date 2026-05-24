@@ -54,17 +54,17 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                         else:
                             angle = right_angle
                             
-                        if angle < 60:
+                        if angle < 75:
                             state = "BENT"
                             guidance = "GOOD SQUEEZE! NOW EXTEND"
-                        elif angle > 150:
+                        elif angle > 135:
                             state = "STRAIGHT"
                             guidance = "GOOD EXTENSION! NOW CURL"
                         else:
                             state = "MOVING"
-                            if angle > 60 and angle < 100:
+                            if angle > 75 and angle < 105:
                                 guidance = "CURL HIGHER TO FINISH"
-                            elif angle > 110 and angle < 150:
+                            elif angle > 105 and angle < 135:
                                 guidance = "LOWER ARMS SLOWLY"
                             else:
                                 guidance = "KEEP ELBOWS STATIONARY"
@@ -85,17 +85,17 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                         else:
                             angle = right_angle
                             
-                        if angle < 95:
+                        if angle < 110:
                             state = "BENT"
                             guidance = "GOOD DEPTH! RISE UP"
-                        elif angle > 160:
+                        elif angle > 150:
                             state = "STRAIGHT"
                             guidance = "STAND FULLY TO START"
                         else:
                             state = "MOVING"
-                            if angle >= 95 and angle < 130:
+                            if angle >= 110 and angle < 130:
                                 guidance = "SQUAT DEEPER FOR FULL RANGE"
-                            elif angle >= 130 and angle < 160:
+                            elif angle >= 130 and angle < 150:
                                 guidance = "CONTROL THE LOWERING PHASE"
                             else:
                                 guidance = "KEEP BACK STRAIGHT"
@@ -116,17 +116,17 @@ async def pose_detection_socket(websocket: WebSocket, target: str = "general"):
                         else:
                             angle = right_angle
                             
-                        if angle < 60:
+                        if angle < 75:
                             state = "BENT"
                             guidance = "GOOD CONTRACT! PRESS UP"
-                        elif angle > 130:
+                        elif angle > 120:
                             state = "STRAIGHT"
                             guidance = "GOOD EXTENSION! LOWER DOWN"
                         else:
                             state = "MOVING"
-                            if angle >= 60 and angle < 100:
+                            if angle >= 75 and angle < 95:
                                 guidance = "PRESS HIGHER"
-                            elif angle >= 100 and angle < 130:
+                            elif angle >= 95 and angle < 120:
                                 guidance = "LOWER DOWN SLOWLY"
                             else:
                                 guidance = "KEEP SHOULDERS LEVEL"

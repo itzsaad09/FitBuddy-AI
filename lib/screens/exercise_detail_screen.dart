@@ -242,7 +242,9 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const WorkoutWithAiScreen(),
+                  builder: (context) => WorkoutWithAiScreen(
+                    targetMuscle: _currentExercise.target,
+                  ),
                 ),
               );
             },

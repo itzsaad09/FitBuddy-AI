@@ -10,7 +10,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 
 class WorkoutWithAiScreen extends StatefulWidget {
-  const WorkoutWithAiScreen({super.key});
+  final String targetMuscle;
+  const WorkoutWithAiScreen({super.key, this.targetMuscle = 'general'});
 
   @override
   State<WorkoutWithAiScreen> createState() => _WorkoutWithAiScreenState();
@@ -33,6 +34,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
   String _localUrl = '';
   String _remoteUrl = '';
   String _currentActiveUrl = '';
+  int _repCount = 0;
+  String _lastState = 'UNKNOWN';
 
   @override
   void initState() {
@@ -122,10 +125,13 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
 
   void _connectWebSocket() {
     if (_currentActiveUrl.isEmpty) return;
-    print('DEBUG: Connecting to AI: $_currentActiveUrl');
+    print('DEBUG: Connecting to AI: $_currentActiveUrl. Target: ${widget.targetMuscle}');
 
     try {
-      _channel = WebSocketChannel.connect(Uri.parse(_currentActiveUrl));
+      final uri = Uri.parse(_currentActiveUrl).replace(
+        queryParameters: {'target': widget.targetMuscle.toLowerCase()},
+      );
+      _channel = WebSocketChannel.connect(uri);
 
       // We set a flag to track if we've successfully received any message
       bool receivedData = false;
@@ -154,6 +160,15 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
               setState(() {
                 _targetLandmarks = decoded['landmarks'];
                 _currentFormStatus = (decoded['classification'] ?? '...').toString().toUpperCase();
+                
+                final String rawState = (decoded['state'] ?? 'UNKNOWN').toString().toUpperCase();
+                if (rawState == 'STRAIGHT' || rawState == 'BENT') {
+                  if (rawState == 'STRAIGHT' && _lastState == 'BENT') {
+                    _repCount++;
+                    print("DEBUG: REP COUNTED: $_repCount");
+                  }
+                  _lastState = rawState;
+                }
               });
               _sendFrame();
             }
@@ -305,6 +320,53 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
                                                   .lensDirection ==
                                               CameraLensDirection.front,
                                         ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // Reps Counter Badge (Top Right)
+                            Positioned(
+                              top: 20,
+                              right: 20,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: colorScheme.primary.withValues(alpha: 0.4),
+                                    width: 1.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: colorScheme.primary.withValues(alpha: 0.2),
+                                      blurRadius: 10,
+                                      spreadRadius: 1,
+                                    )
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.fitness_center_rounded,
+                                      color: colorScheme.primary,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'REPS: $_repCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 1.0,
                                       ),
                                     ),
                                   ],

@@ -2,14 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/foundation.dart';
 import 'package:camera/camera.dart';
-
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:image/image.dart' as img;
-import 'dart:typed_data';
+
 
 class WorkoutWithAiScreen extends StatefulWidget {
   final String targetMuscle;
@@ -36,6 +36,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
   late Ticker _ticker;
   WebSocketChannel? _channel;
   bool _isConnected = false;
+  bool _isProcessing = false;
 
   String _currentFormStatus = 'WAITING...';
 
@@ -57,7 +58,7 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
 
   void _loadUrls() {
     String local = dotenv.env['LOCAL_BACKEND_URL'] ?? '';
-    String remote = dotenv.env['BACKEND'] ?? '';
+    String remote = dotenv.env['BACKEND_URL'] ?? '';
 
     String format(String u) {
       if (u.isEmpty) return '';
@@ -242,6 +243,8 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
     if (!mounted || _controller == null || !_controller!.value.isInitialized)
       return;
 
+    if (_isProcessing) return; // Prevent overlapping frames
+
     // Check if we have a channel, even if 'isConnected' isn't true yet
     // This allows the first frame to 'wake up' the backend
     if (_channel == null) {
@@ -251,22 +254,21 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
       return;
     }
 
+    _isProcessing = true;
+
     try {
       final XFile image = await _controller!.takePicture();
-      Uint8List bytes = await image.readAsBytes();
+      final Uint8List rawBytes = await image.readAsBytes();
 
-      // Compress and downscale in memory (180px width is perfect for MediaPipe, reducing payload size by 98%)
-      final img.Image? decoded = img.decodeImage(bytes);
-      if (decoded != null) {
-        final img.Image resized = img.copyResize(decoded, width: 180);
-        bytes = Uint8List.fromList(img.encodeJpg(resized, quality: 50));
-      }
+      // Compress and downscale in background isolate to keep UI thread responsive
+      final Uint8List compressedBytes = await compute(_resizeAndCompressImage, rawBytes);
 
       // Send if channel exists (optimistic connection)
-      _channel!.sink.add(bytes);
+      _channel!.sink.add(compressedBytes);
     } catch (e) {
       debugPrint('Camera Loop Error: $e');
-      Future.delayed(const Duration(milliseconds: 100), _sendFrame);
+    } finally {
+      _isProcessing = false;
     }
   }
 
@@ -657,4 +659,14 @@ class PosePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant PosePainter oldDelegate) => true;
+}
+
+// Top-level function for background isolate processing
+Uint8List _resizeAndCompressImage(Uint8List bytes) {
+  final img.Image? decoded = img.decodeImage(bytes);
+  if (decoded != null) {
+    final img.Image resized = img.copyResize(decoded, width: 180);
+    return Uint8List.fromList(img.encodeJpg(resized, quality: 50));
+  }
+  return bytes;
 }

@@ -122,6 +122,11 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
         );
 
         await _controller!.initialize();
+        try {
+          await _controller!.setFlashMode(FlashMode.off);
+        } catch (e) {
+          debugPrint('Failed to disable flash: $e');
+        }
         if (mounted) {
           setState(() => _isCameraInitialized = true);
           _connectWebSocket();

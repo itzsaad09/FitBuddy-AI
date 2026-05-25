@@ -177,4 +177,5 @@ jobs:
           artifacts: "*/FitBuddyAI-v*.apk,*/FitBuddyAI-v*.ipa"
           # 3. Use the dynamic version as the Tag so every build is a new release
           tag: v${{ needs.build_android.outputs.version }}
+          makeLatest: true
           token: ${{ secrets.TOKEN }}

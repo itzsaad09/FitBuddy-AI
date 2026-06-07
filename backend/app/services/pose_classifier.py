@@ -1,14 +1,20 @@
 import pandas as pd
 import numpy as np
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 import os
 
 class PoseClassifier:
     """
-    KNN Classifier that automatically trains on joined landmarks and labels from assets/.
+    Artificial Neural Network (Multi-Layer Perceptron) Classifier that automatically trains on joined landmarks and labels from assets/.
     """
     def __init__(self, landmarks_path="assets/landmarks.csv", labels_path="assets/labels.csv"):
-        self.model = KNeighborsClassifier(n_neighbors=5, weights='distance')
+        self.model = MLPClassifier(
+            hidden_layer_sizes=(64, 32),
+            activation='relu',
+            solver='adam',
+            max_iter=500,
+            random_state=42
+        )
         self.is_trained = False
         
         # Check relative to backend/
@@ -23,7 +29,7 @@ class PoseClassifier:
 
     def train(self, landmarks_path, labels_path):
         try:
-            print("AI: 🧠 Starting training on assets data...")
+            print("AI: [Training] Starting training on assets data...")
             # 1. Load data
             df_landmarks = pd.read_csv(landmarks_path)
             df_labels = pd.read_csv(labels_path)
@@ -38,7 +44,7 @@ class PoseClassifier:
             X_raw = df[feature_cols].values
             y = df['class'].values
             
-            print(f"AI: 📏 Normalizing {len(X_raw)} training samples...")
+            print(f"AI: [Normalize] Normalizing {len(X_raw)} training samples...")
             X_normalized = []
             for row in X_raw:
                 # Reshape row to (33, 3) for normalization
@@ -60,9 +66,9 @@ class PoseClassifier:
             # 4. Train
             self.model.fit(X_normalized, y)
             self.is_trained = True
-            print(f"AI: ✅ KNN Brain Trained & Normalized! {len(df)} frames indexed.")
+            print(f"AI: [Success] Neural Network (ANN) Brain Trained & Normalized! {len(df)} frames indexed.")
         except Exception as e:
-            print(f"AI: ❌ Training Error: {e}")
+            print(f"AI: [Error] Training Error: {e}")
 
     def predict(self, normalized_vector):
         if not self.is_trained or normalized_vector is None:

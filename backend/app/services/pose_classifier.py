@@ -17,15 +17,34 @@ class PoseClassifier:
         )
         self.is_trained = False
         
-        # Check relative to backend/
-        if os.path.exists(landmarks_path) and os.path.exists(labels_path):
-            self.train(landmarks_path, labels_path)
-        else:
-            # Fallback for different CWDs
-            alt_landmarks = os.path.join("backend", landmarks_path)
-            alt_labels = os.path.join("backend", labels_path)
-            if os.path.exists(alt_landmarks) and os.path.exists(alt_labels):
-                self.train(alt_landmarks, alt_labels)
+        # Check if pre-trained model exists to avoid CPU/RAM bottleneck on Render
+        model_pickle_path = "assets/pose_model.pkl"
+        alt_pickle_path = os.path.join("backend", model_pickle_path)
+        
+        loaded = False
+        for path in [model_pickle_path, alt_pickle_path]:
+            if os.path.exists(path):
+                try:
+                    import pickle
+                    with open(path, 'rb') as f:
+                        self.model = pickle.load(f)
+                    self.is_trained = True
+                    print(f"AI: [Success] Loaded pre-trained ANN from {path}!")
+                    loaded = True
+                    break
+                except Exception as e:
+                    print(f"AI: [Error] Failed to load pre-trained pickle: {e}")
+                    
+        if not loaded:
+            # Check relative to backend/
+            if os.path.exists(landmarks_path) and os.path.exists(labels_path):
+                self.train(landmarks_path, labels_path)
+            else:
+                # Fallback for different CWDs
+                alt_landmarks = os.path.join("backend", landmarks_path)
+                alt_labels = os.path.join("backend", labels_path)
+                if os.path.exists(alt_landmarks) and os.path.exists(alt_labels):
+                    self.train(alt_landmarks, alt_labels)
 
     def train(self, landmarks_path, labels_path):
         try:

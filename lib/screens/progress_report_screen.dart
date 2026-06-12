@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:fitbuddy_ai/services/database_service.dart';
 import 'package:flutter/services.dart';
@@ -52,7 +51,7 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
-                maxHeight: 120,
+                constraints: const BoxConstraints(maxHeight: 120),
                 decoration: BoxDecoration(
                   color: Colors.grey.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),

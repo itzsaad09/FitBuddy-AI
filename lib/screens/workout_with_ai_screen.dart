@@ -9,6 +9,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:web_socket_channel/status.dart' as status;
 import 'package:image/image.dart' as img;
+import 'package:fitbuddy_ai/services/database_service.dart';
 
 
 class WorkoutWithAiScreen extends StatefulWidget {
@@ -574,7 +575,12 @@ class _WorkoutWithAiScreenState extends State<WorkoutWithAiScreen>
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () async {
+                    if (_repCount > 0) {
+                      await DatabaseService().saveWorkoutSession(widget.exerciseName, _repCount);
+                    }
+                    if (mounted) Navigator.pop(context);
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: Colors.white,

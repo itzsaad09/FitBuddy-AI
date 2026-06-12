@@ -4,6 +4,7 @@ import 'package:fitbuddy_ai/services/database_service.dart';
 import 'package:fitbuddy_ai/services/theme_service.dart';
 import 'package:fitbuddy_ai/screens/category_exercises_screen.dart';
 import 'package:fitbuddy_ai/screens/workout_plan_screen.dart';
+import 'package:fitbuddy_ai/screens/progress_report_screen.dart';
 import 'package:fitbuddy_ai/services/api_service.dart';
 import 'package:fitbuddy_ai/models/workout_plan.dart';
 import 'package:shimmer/shimmer.dart';
@@ -518,6 +519,20 @@ class _SettingsSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 40),
+          _buildActionItem(
+            context,
+            icon: Icons.analytics_outlined,
+            title: 'Progress Profile',
+            subtitle: 'Weekly stats and data backup/restore',
+            onTap: () {
+              Navigator.pop(context); // Close sheet
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProgressReportScreen()),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
           _buildActionItem(
             context,
             icon: Icons.brightness_6_outlined,

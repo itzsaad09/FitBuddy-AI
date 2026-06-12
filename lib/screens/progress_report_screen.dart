@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fitbuddy_ai/services/database_service.dart';
-import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ProgressReportScreen extends StatefulWidget {
   const ProgressReportScreen({super.key});
@@ -37,108 +41,64 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
   Future<void> _exportBackup() async {
     try {
       final jsonBackup = await _db.exportDatabaseToJson();
-      // Copy to clipboard as a simple backup string, or show in a copy dialogue
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text('Backup Exported', style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Your portable workout logs & plans backup is ready. Copy the code below to save it:'),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                constraints: const BoxConstraints(maxHeight: 120),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(jsonBackup, style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: jsonBackup));
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Backup copied to clipboard!')),
-                );
-              },
-              child: const Text('COPY CODE'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('CLOSE'),
-            ),
-          ],
+      
+      // Get temporary directory to write the file to
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/fitbuddy_backup.json');
+      await tempFile.writeAsString(jsonBackup);
+      
+      // Trigger the native share-sheet
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(tempFile.path)],
+          text: 'FitBuddy AI Backup - Workout Logs & Plans',
         ),
+      );
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup export window closed.')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to export: $e')),
+        SnackBar(content: Text('Failed to export file: $e')),
       );
     }
   }
 
   Future<void> _importBackup() async {
-    final textController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Restore Backup', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Paste your exported backup JSON code below:'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: textController,
-              maxLines: 4,
-              decoration: InputDecoration(
-                hintText: '{"version":2, ...}',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                filled: true,
-                fillColor: Colors.grey.withValues(alpha: 0.05),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (textController.text.trim().isEmpty) return;
-              try {
-                await _db.importDatabaseFromJson(textController.text.trim());
-                if (!mounted) return;
-                Navigator.pop(context);
-                _loadReportData();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Backup restored successfully!')),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to restore: $e')),
-                );
-              }
-            },
-            child: const Text('RESTORE'),
-          ),
-        ],
-      ),
-    );
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+
+      if (result == null || result.files.single.path == null) {
+        // User cancelled picker
+        return;
+      }
+
+      final file = File(result.files.single.path!);
+      final jsonContent = await file.readAsString();
+
+      // Validate JSON content before importing
+      final Map<String, dynamic> parsed = jsonDecode(jsonContent);
+      if (!parsed.containsKey('workout_plans') || !parsed.containsKey('workout_history')) {
+        throw const FormatException('Invalid backup file schema.');
+      }
+
+      await _db.importDatabaseFromJson(jsonContent);
+      
+      if (!mounted) return;
+      _loadReportData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Backup file imported and restored successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to import backup file: $e')),
+      );
+    }
   }
 
   String _formatDate(String isoString) {
@@ -260,8 +220,8 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
                                 Expanded(
                                   child: ElevatedButton.icon(
                                     onPressed: _exportBackup,
-                                    icon: const Icon(Icons.download_rounded, size: 18),
-                                    label: const Text('EXPORT PORTABLE BACKUP'),
+                                    icon: const Icon(Icons.share_rounded, size: 18),
+                                    label: const Text('EXPORT BACKUP FILE'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: colorScheme.primary,
                                       foregroundColor: Colors.white,
@@ -275,8 +235,8 @@ class _ProgressReportScreenState extends State<ProgressReportScreen> {
                                 Expanded(
                                   child: OutlinedButton.icon(
                                     onPressed: _importBackup,
-                                    icon: const Icon(Icons.upload_rounded, size: 18),
-                                    label: const Text('RESTORE PROFILE'),
+                                    icon: const Icon(Icons.folder_open_rounded, size: 18),
+                                    label: const Text('RESTORE FILE'),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: theme.textTheme.bodyLarge?.color,
                                       side: BorderSide(color: (isDark ? Colors.white : Colors.black).withValues(alpha: 0.15)),
